@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consultorios dra. Abraldes - Gestión de Turnos</title>
+    <title>Consultorios Dra. Carolina Abraldes - Gestión de Turnos</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,9 +20,26 @@
                             700: '#0f766e',
                             900: '#134e4a',
                         }
+                    },
+                    animation: {
+                        'scaleIn': 'scaleIn 0.2s ease-out forwards'
+                    },
+                    keyframes: {
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.9)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
                     }
                 }
-            }
+            },
+            safelist: [
+                'bg-blue-100', 'text-blue-600', 'border-blue-500', 'bg-blue-600', 'hover:bg-blue-700', 'hover:border-blue-500', 'text-blue-700', 'text-blue-800',
+                'bg-emerald-100', 'text-emerald-600', 'border-emerald-500', 'bg-emerald-600', 'hover:bg-emerald-700', 'hover:border-emerald-500', 'text-emerald-700', 'text-emerald-800',
+                'bg-rose-100', 'text-rose-600', 'border-rose-500', 'bg-rose-600', 'hover:bg-rose-700', 'hover:border-rose-500', 'text-rose-700', 'text-rose-800',
+                'bg-amber-100', 'text-amber-600', 'border-amber-500', 'bg-amber-600', 'hover:bg-amber-700', 'hover:border-amber-500', 'text-amber-700', 'text-amber-800',
+                'bg-purple-100', 'text-purple-600', 'border-purple-500', 'bg-purple-600', 'hover:bg-purple-700', 'hover:border-purple-500', 'text-purple-700', 'text-purple-800',
+                'bg-indigo-100', 'text-indigo-600', 'border-indigo-500', 'bg-indigo-600', 'hover:bg-indigo-700', 'hover:border-indigo-500', 'text-indigo-700', 'text-indigo-800',
+            ]
         }
     </script>
 
@@ -56,12 +73,11 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'react';
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save } from 'lucide-react';
+        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp } from 'lucide-react';
         
         // --- CONFIGURACIÓN DE FIREBASE SIMPLIFICADA ---
-        // INSTRUCCIONES: Reemplaza los valores abajo con los de tu consola de Firebase
         const manualConfig = {
             apiKey: "TU_API_KEY_AQUI", 
             authDomain: "tu-proyecto.firebaseapp.com",
@@ -81,7 +97,9 @@
                 startHour: 9,
                 endHour: 17,
                 duration: 30, // minutos
-                insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"]
+                insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"],
+                color: 'blue',
+                blockedDates: []
             },
             {
                 id: 2,
@@ -91,7 +109,9 @@
                 startHour: 14,
                 endHour: 20,
                 duration: 20,
-                insurances: ["IOMA", "PAMI", "Particular"]
+                insurances: ["IOMA", "PAMI", "Particular"],
+                color: 'emerald',
+                blockedDates: []
             },
             {
                 id: 3,
@@ -101,16 +121,37 @@
                 startHour: 10,
                 endHour: 16,
                 duration: 45,
-                insurances: ["Todas las Obras Sociales"]
+                insurances: ["Todas las Obras Sociales"],
+                color: 'rose',
+                blockedDates: []
             }
+        ];
+
+        const COLOR_PALETTE = [
+            { id: 'blue', label: 'Azul', hex: '#2563eb' },
+            { id: 'emerald', label: 'Verde', hex: '#059669' },
+            { id: 'rose', label: 'Rosa', hex: '#e11d48' },
+            { id: 'amber', label: 'Naranja', hex: '#d97706' },
+            { id: 'purple', label: 'Violeta', hex: '#7c3aed' },
         ];
 
         // --- UTILIDADES ---
         const formatDateDisplay = (dateStr) => {
             if (!dateStr) return '-';
-            // Asume dateStr en formato YYYY-MM-DD
             const [y, m, d] = dateStr.split('-');
             return `${d}/${m}/${y}`;
+        };
+
+        const calculateAge = (dateString) => {
+            if (!dateString) return '';
+            const today = new Date();
+            const birthDate = new Date(dateString);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
         };
 
         // --- COMPONENTES UI REUTILIZABLES ---
@@ -131,13 +172,48 @@
             );
         };
 
-        const Card = ({ children, className = "", ...props }) => (
-            <div className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} {...props}>
+        const Modal = ({ isOpen, onClose, onConfirm, title, children, color = 'blue', confirmText = "Confirmar", showCancel = true }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-opacity">
+                    <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scaleIn border-t-8 border-${color}-500`}>
+                        <div className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className={`text-xl font-bold text-gray-900`}>{title}</h3>
+                                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="mb-6 text-gray-600">
+                                {children}
+                            </div>
+                            <div className="flex gap-3">
+                                {showCancel && (
+                                    <button onClick={onClose} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">
+                                        Cancelar
+                                    </button>
+                                )}
+                                <button onClick={onConfirm} className={`flex-1 px-4 py-3 rounded-lg text-white font-bold shadow-md bg-${color}-600 hover:bg-${color}-700 transition-colors flex justify-center items-center gap-2`}>
+                                    {confirmText}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Card = ({ children, className = "", onClick, ...props }) => (
+            <div 
+                className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} 
+                onClick={onClick}
+                {...props}
+            >
                 {children}
             </div>
         );
 
-        const Button = ({ children, onClick, variant = 'primary', disabled = false, fullWidth = false, icon: Icon, type = "button" }) => {
+        const Button = ({ children, onClick, variant = 'primary', disabled = false, fullWidth = false, icon: Icon, type = "button", color = 'medical' }) => {
             const baseClass = "px-4 py-3 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
             const variants = {
                 primary: "bg-medical-600 hover:bg-medical-700 text-white shadow-md shadow-medical-200",
@@ -158,40 +234,105 @@
             );
         };
 
+        // --- COMPONENTE DE LOGIN ---
+        const LoginModal = ({ isOpen, onClose, onSuccess }) => {
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState(false);
+
+            const handleSubmit = () => {
+                if (password === '1234') { // CLAVE SIMPLE PARA DEMO
+                    onSuccess();
+                    setPassword('');
+                    setError(false);
+                } else {
+                    setError(true);
+                }
+            };
+
+            return (
+                <Modal 
+                    isOpen={isOpen} 
+                    onClose={onClose} 
+                    onConfirm={handleSubmit} 
+                    title="Acceso Profesional" 
+                    confirmText="Ingresar"
+                    color="purple"
+                >
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600">Ingrese su clave para acceder a la agenda.</p>
+                        <div className="relative">
+                            <KeyRound className="absolute left-3 top-3 text-gray-400" size={20} />
+                            <input 
+                                type="password" 
+                                autoFocus
+                                className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-purple-200'}`}
+                                placeholder="Clave de acceso"
+                                value={password}
+                                onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                            />
+                        </div>
+                        {error && <p className="text-xs text-red-500 font-medium">Clave incorrecta. Intente nuevamente.</p>}
+                    </div>
+                </Modal>
+            );
+        };
+
         // --- LOGICA PRINCIPAL (HOOKS Y APP) ---
 
         const App = () => {
-            // Estado Global
-            const [view, setView] = useState('landing'); // landing, patient, professional, admin
+            const [view, setView] = useState('landing');
             const [appointments, setAppointments] = useState([]);
-            // Estado para Consultorios (Ahora dinámico)
             const [consultorios, setConsultorios] = useState(DEFAULT_CONSULTORIOS);
             const [pendingSyncs, setPendingSyncs] = useState([]);
             const [toast, setToast] = useState(null);
-            const [isOnline, setIsOnline] = useState(true); // Simulación de estado de red
+            const [isOnline, setIsOnline] = useState(true);
             const [firebaseReady, setFirebaseReady] = useState(false);
+            
+            // Estado para manejo de login y links directos
+            const [showLogin, setShowLogin] = useState(false);
+            const [directRoomId, setDirectRoomId] = useState(null);
 
-            // Inicialización
             useEffect(() => {
-                // 1. Cargar LocalStorage
                 const localData = localStorage.getItem('appointments');
                 const localQueue = localStorage.getItem('pendingSyncs');
-                const localConsultorios = localStorage.getItem('consultorios'); // Cargar consultorios
+                const localConsultorios = localStorage.getItem('consultorios');
                 
                 if (localData) setAppointments(JSON.parse(localData));
                 if (localQueue) setPendingSyncs(JSON.parse(localQueue));
-                // Si existen consultorios guardados, usarlos; si no, usar default
-                if (localConsultorios) setConsultorios(JSON.parse(localConsultorios));
+                
+                // Cargar consultorios y luego chequear URL
+                let currentConsultorios = DEFAULT_CONSULTORIOS;
+                if (localConsultorios) {
+                    try {
+                        const parsed = JSON.parse(localConsultorios);
+                        // Validación de seguridad para evitar cuelgues por datos corruptos
+                        currentConsultorios = parsed.map(c => ({
+                            ...c,
+                            duration: Number(c.duration) > 0 ? Number(c.duration) : 30 // Fallback seguro
+                        }));
+                    } catch (e) {
+                        console.error("Error al cargar consultorios locales", e);
+                    }
+                    setConsultorios(currentConsultorios);
+                }
 
-                // 2. Verificar Config Firebase
                 if (manualConfig.apiKey !== "TU_API_KEY_AQUI") {
                     console.log("Firebase configurado (Simulado)");
                     setFirebaseReady(true);
-                } else {
-                    console.log("Modo Local: Firebase no configurado");
                 }
 
-                // Listener de conexión
+                // Chequeo de Link Directo
+                const params = new URLSearchParams(window.location.search);
+                const roomParam = params.get('room');
+                if (roomParam) {
+                    const id = parseInt(roomParam);
+                    if (currentConsultorios.find(c => c.id === id)) {
+                        setDirectRoomId(id);
+                        setView('patient');
+                    }
+                }
+
                 window.addEventListener('online', () => setIsOnline(true));
                 window.addEventListener('offline', () => setIsOnline(false));
 
@@ -201,42 +342,31 @@
                 };
             }, []);
 
-            // Mostrar Toast
             const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
 
-            // Guardar Consultorios
             const saveConsultorios = (newConsultorios) => {
                 setConsultorios(newConsultorios);
                 localStorage.setItem('consultorios', JSON.stringify(newConsultorios));
                 showToast("Configuración de consultorios guardada");
             };
 
-            // Persistencia Híbrida
             const saveAppointment = (newAppointment) => {
                 try {
-                    // 1. Guardar en Estado
                     const updatedAppointments = [...appointments, newAppointment];
                     setAppointments(updatedAppointments);
-
-                    // 2. Guardar en LocalStorage (Offline Priority)
                     localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
 
-                    // 3. Cola de Sincronización
                     const syncItem = { action: 'ADD', data: newAppointment, timestamp: Date.now() };
                     const updatedQueue = [...pendingSyncs, syncItem];
                     setPendingSyncs(updatedQueue);
                     localStorage.setItem('pendingSyncs', JSON.stringify(updatedQueue));
 
-                    // 4. Intentar Sync (Si hay Firebase)
                     if (firebaseReady && isOnline) {
-                        // syncWithFirebase(updatedQueue); -> Lógica futura
-                        console.log("Intentando sincronizar con Firebase...");
                         setTimeout(() => {
                             setPendingSyncs([]);
                             localStorage.setItem('pendingSyncs', JSON.stringify([]));
                         }, 2000);
                     }
-
                     return true;
                 } catch (error) {
                     console.error("Error al guardar:", error);
@@ -244,61 +374,76 @@
                 }
             };
 
-            // --- VISTAS ---
+            // Función para confirmar/marcar asistencia
+            const toggleConfirmation = (appointmentId) => {
+                const updatedAppointments = appointments.map(apt => {
+                    if (apt.id === appointmentId) {
+                        return { ...apt, confirmedByProfessional: !apt.confirmedByProfessional };
+                    }
+                    return apt;
+                });
+                setAppointments(updatedAppointments);
+                localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
+                // Opcional: Feedback
+                const apt = updatedAppointments.find(a => a.id === appointmentId);
+                showToast(apt.confirmedByProfessional ? "Turno marcado como confirmado" : "Confirmación removida", "success");
+            };
+
+            const handleProfessionalAccess = () => {
+                setShowLogin(true);
+            };
+
+            const handleLoginSuccess = () => {
+                setShowLogin(false);
+                setView('professional');
+            };
 
             if (view === 'landing') {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-medical-50 to-white relative">
-                        {/* Botón Admin Flotante */}
-                        <button 
-                            onClick={() => setView('admin')}
-                            className="absolute top-6 right-6 p-2 text-gray-400 hover:text-medical-600 transition-colors"
-                            title="Configuración de Consultorios"
-                        >
-                            <Settings size={24} />
-                        </button>
+                        <LoginModal 
+                            isOpen={showLogin} 
+                            onClose={() => setShowLogin(false)} 
+                            onSuccess={handleLoginSuccess} 
+                        />
+                        
+                        {/* ACCESO PROFESIONAL (LATERALIZADO ARRIBA Y PEQUEÑO) - BOTÓN CONFIGURACIÓN ELIMINADO */}
+                        <div className="absolute top-6 right-6 flex gap-2">
+                            <button 
+                                onClick={handleProfessionalAccess}
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:text-medical-600 hover:border-medical-200 hover:bg-medical-50 shadow-sm transition-all"
+                            >
+                                <Lock size={16} />
+                                <span className="hidden sm:inline">Soy Profesional</span>
+                            </button>
+                        </div>
 
-                        <div className="text-center mb-10 max-w-lg">
-                            <div className="bg-medical-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <Stethoscope className="text-medical-600" size={40} />
+                        <div className="text-center mb-10 max-w-3xl mt-12">
+                            <div className="bg-medical-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                <Stethoscope className="text-medical-600" size={48} />
                             </div>
-                            <h1 className="text-4xl font-bold text-gray-900 mb-4">Consultorios dra. Abraldes</h1>
-                            <p className="text-gray-600 text-lg">Bienvenido al sistema de gestión de turnos integrado.</p>
+                            <h1 className="text-5xl font-bold text-gray-900 mb-4 tracking-tight">Consultorios Dra. Carolina Abraldes</h1>
+                            <p className="text-gray-600 text-xl">Bienvenido al sistema de gestión de turnos integrado.</p>
                             
                             {!firebaseReady && (
-                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
-                                    <WifiOff size={14} /> Modo Local (Offline-First)
+                                <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
+                                    <WifiOff size={16} /> Modo Local (Offline-First)
                                 </div>
                             )}
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl">
-                            <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-md group" >
-                                <div className="flex flex-col h-full justify-between" onClick={() => setView('patient')}>
-                                    <div>
-                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-                                            <User size={24} />
-                                        </div>
-                                        <h2 className="text-xl font-bold text-gray-900 mb-2">Soy Paciente</h2>
-                                        <p className="text-gray-500">Solicitar un nuevo turno médico, ver consultorios y horarios disponibles.</p>
+                        {/* TARJETA PACIENTE (CENTRADA Y 50% MAS GRANDE) */}
+                        <div className="w-full max-w-xl">
+                            <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-xl group transform hover:-translate-y-1 border-2 border-medical-50" onClick={() => setView('patient')}>
+                                <div className="flex flex-col items-center text-center p-8">
+                                    <div className="w-24 h-24 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform shadow-inner">
+                                        <User size={48} />
                                     </div>
-                                    <Button className="mt-6 w-full" onClick={() => setView('patient')}>
-                                        Solicitar Turno <ChevronRight size={18} />
-                                    </Button>
-                                </div>
-                            </Card>
-
-                            <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-md group">
-                                <div className="flex flex-col h-full justify-between" onClick={() => setView('professional')}>
-                                    <div>
-                                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
-                                            <Calendar size={24} />
-                                        </div>
-                                        <h2 className="text-xl font-bold text-gray-900 mb-2">Soy Profesional</h2>
-                                        <p className="text-gray-500">Acceder a la agenda diaria, semanal y mensual. Gestionar pacientes.</p>
-                                    </div>
-                                    <Button variant="secondary" className="mt-6 w-full" onClick={() => setView('professional')}>
-                                        Ver Agenda <ChevronRight size={18} />
+                                    <h2 className="text-4xl font-bold text-gray-900 mb-4">Soy Paciente</h2>
+                                    <p className="text-gray-500 text-lg mb-8 leading-relaxed">Solicitar un nuevo turno médico, ver consultorios y horarios disponibles.</p>
+                                    
+                                    <Button className="w-full text-lg py-4 font-bold" onClick={(e) => { e.stopPropagation(); setView('patient'); }}>
+                                        Solicitar Turno <ChevronRight size={24} />
                                     </Button>
                                 </div>
                             </Card>
@@ -317,7 +462,7 @@
                                 <div className="bg-medical-600 text-white p-1.5 rounded-md">
                                     <Stethoscope size={20} />
                                 </div>
-                                <span className="font-bold text-gray-800 hidden sm:block">Consultorios dra. Abraldes</span>
+                                <span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
@@ -339,27 +484,33 @@
                             <PatientView 
                                 consultorios={consultorios} 
                                 appointments={appointments}
+                                initialRoomId={directRoomId}
+                                showToast={showToast}
                                 onSave={(apt) => {
                                     if(saveAppointment(apt)) {
                                         showToast("Turno confirmado exitosamente");
                                         setView('landing');
+                                        setDirectRoomId(null); // Reset direct link param
                                     } else {
                                         showToast("Error al guardar", "error");
                                     }
                                 }}
-                                onCancel={() => setView('landing')}
+                                onCancel={() => { setView('landing'); setDirectRoomId(null); }}
                             />
                         )}
                         {view === 'professional' && (
                             <ProfessionalView 
                                 consultorios={consultorios} 
                                 appointments={appointments}
+                                onAdmin={() => setView('admin')}
+                                toggleConfirmation={toggleConfirmation}
                             />
                         )}
                         {view === 'admin' && (
                             <AdminView 
                                 consultorios={consultorios} 
                                 onSave={saveConsultorios}
+                                onBack={() => setView('professional')}
                             />
                         )}
                     </main>
@@ -368,9 +519,10 @@
         };
 
         // --- VISTA ADMIN ---
-        const AdminView = ({ consultorios, onSave }) => {
+        const AdminView = ({ consultorios, onSave, onBack }) => {
             const [editingList, setEditingList] = useState(JSON.parse(JSON.stringify(consultorios)));
             const [expandedId, setExpandedId] = useState(null);
+            const [blockDateInput, setBlockDateInput] = useState('');
 
             const handleChange = (id, field, value) => {
                 setEditingList(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
@@ -386,6 +538,26 @@
                 }));
             };
 
+            const addBlockedDate = (consultoryId) => {
+                if (!blockDateInput) return;
+                setEditingList(prev => prev.map(c => {
+                    if (c.id !== consultoryId) return c;
+                    const currentBlocked = c.blockedDates || [];
+                    if (!currentBlocked.includes(blockDateInput)) {
+                        return { ...c, blockedDates: [...currentBlocked, blockDateInput].sort() };
+                    }
+                    return c;
+                }));
+                setBlockDateInput('');
+            };
+
+            const removeBlockedDate = (consultoryId, dateToRemove) => {
+                setEditingList(prev => prev.map(c => {
+                    if (c.id !== consultoryId) return c;
+                    return { ...c, blockedDates: c.blockedDates.filter(d => d !== dateToRemove) };
+                }));
+            };
+
             const addNew = () => {
                 const newId = Math.max(...editingList.map(c => c.id), 0) + 1;
                 const newConsultory = {
@@ -396,7 +568,9 @@
                     startHour: 9,
                     endHour: 17,
                     duration: 30,
-                    insurances: []
+                    insurances: [],
+                    color: 'blue',
+                    blockedDates: []
                 };
                 setEditingList([...editingList, newConsultory]);
                 setExpandedId(newId);
@@ -413,18 +587,26 @@
             return (
                 <div className="max-w-4xl mx-auto fade-in">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                            <Settings className="text-medical-600"/> Configuración de Consultorios
-                        </h2>
+                        <div className="flex items-center gap-3">
+                            <button onClick={onBack} className="p-2 bg-white rounded-full text-gray-500 hover:text-medical-600 hover:shadow-sm border border-gray-200 transition-all">
+                                <ArrowLeft size={20}/>
+                            </button>
+                            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <Settings className="text-medical-600"/> Configuración de Consultorios
+                            </h2>
+                        </div>
                         <Button onClick={() => onSave(editingList)} icon={Save}>Guardar Cambios</Button>
                     </div>
 
                     <div className="space-y-4">
                         {editingList.map(cons => (
-                            <Card key={cons.id} className={`transition-all ${expandedId === cons.id ? 'ring-2 ring-medical-500' : ''}`}>
+                            <Card key={cons.id} className={`transition-all border-l-4 border-l-${cons.color}-500 ${expandedId === cons.id ? 'ring-2 ring-medical-500' : ''}`}>
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)}>
-                                        <h3 className="font-bold text-lg text-gray-800">{cons.name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-lg text-gray-800">{cons.name}</h3>
+                                            <div className={`w-3 h-3 rounded-full bg-${cons.color}-500`}></div>
+                                        </div>
                                         <p className="text-sm text-gray-500">{cons.address || "Sin dirección"}</p>
                                     </div>
                                     <div className="flex gap-2">
@@ -438,56 +620,102 @@
                                 </div>
 
                                 {expandedId === cons.id && (
-                                    <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-100 animate-fadeIn">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                value={cons.name} onChange={e => handleChange(cons.id, 'name', e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
-                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                value={cons.address} onChange={e => handleChange(cons.id, 'address', e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Obras Sociales (Separa por comas)</label>
-                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                value={cons.insurances.join(', ')} 
-                                                onChange={e => handleChange(cons.id, 'insurances', e.target.value.split(',').map(s => s.trim()))} />
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
+                                    <div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 animate-fadeIn">
+                                        <div className="space-y-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Inicio (Hora)</label>
-                                                <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                    value={cons.startHour} onChange={e => handleChange(cons.id, 'startHour', parseInt(e.target.value))} />
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                                                <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.name} onChange={e => handleChange(cons.id, 'name', e.target.value)} />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Fin (Hora)</label>
-                                                <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                    value={cons.endHour} onChange={e => handleChange(cons.id, 'endHour', parseInt(e.target.value))} />
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                                                <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.address} onChange={e => handleChange(cons.id, 'address', e.target.value)} />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Duración (min)</label>
-                                                <input type="number" step="5" className="w-full border border-gray-300 rounded p-2 text-sm"
-                                                    value={cons.duration} onChange={e => handleChange(cons.id, 'duration', parseInt(e.target.value))} />
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Color Distintivo</label>
+                                                <div className="flex gap-2">
+                                                    {COLOR_PALETTE.map(color => (
+                                                        <button 
+                                                            key={color.id}
+                                                            onClick={() => handleChange(cons.id, 'color', color.id)}
+                                                            className={`w-8 h-8 rounded-full border-2 ${cons.color === color.id ? 'border-gray-600 scale-110' : 'border-transparent'} shadow-sm`}
+                                                            style={{ backgroundColor: color.hex }}
+                                                            title={color.label}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Inicio</label>
+                                                    <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                        value={cons.startHour} onChange={e => handleChange(cons.id, 'startHour', parseInt(e.target.value))} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Fin</label>
+                                                    <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                        value={cons.endHour} onChange={e => handleChange(cons.id, 'endHour', parseInt(e.target.value))} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Duración</label>
+                                                    <input type="number" step="5" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                        value={cons.duration} onChange={e => handleChange(cons.id, 'duration', parseInt(e.target.value))} />
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Días de Atención</label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {DAYS.map((day, idx) => (
-                                                    <button 
-                                                        key={idx}
-                                                        onClick={() => toggleDay(cons.id, idx)}
-                                                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                                                            cons.days.includes(idx) 
-                                                            ? 'bg-medical-600 text-white border-medical-600' 
-                                                            : 'bg-white text-gray-500 border-gray-300 hover:border-medical-300'
-                                                        }`}
-                                                    >
-                                                        {day}
+
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Obras Sociales</label>
+                                                <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.insurances.join(', ')} 
+                                                    onChange={e => handleChange(cons.id, 'insurances', e.target.value.split(',').map(s => s.trim()))} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Días de Atención</label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {DAYS.map((day, idx) => (
+                                                        <button 
+                                                            key={idx}
+                                                            onClick={() => toggleDay(cons.id, idx)}
+                                                            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                                                cons.days.includes(idx) 
+                                                                ? `bg-${cons.color}-600 text-white border-${cons.color}-600` 
+                                                                : 'bg-white text-gray-500 border-gray-300'
+                                                            }`}
+                                                        >
+                                                            {day}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* SECCION FERIADOS / EXCEPCIONES */}
+                                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                                                    <AlertTriangle size={14} className="text-orange-500" /> Días Bloqueados (Feriados/Vacaciones)
+                                                </label>
+                                                <div className="flex gap-2 mb-2">
+                                                    <input 
+                                                        type="date" 
+                                                        className="flex-1 text-sm border border-gray-300 rounded p-1"
+                                                        value={blockDateInput}
+                                                        onChange={e => setBlockDateInput(e.target.value)}
+                                                    />
+                                                    <button onClick={() => addBlockedDate(cons.id)} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-medium">
+                                                        Bloquear
                                                     </button>
-                                                ))}
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {(cons.blockedDates || []).map(date => (
+                                                        <span key={date} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-100 text-red-700 border border-red-200">
+                                                            {formatDateDisplay(date)}
+                                                            <button onClick={() => removeBlockedDate(cons.id, date)} className="hover:text-red-900"><X size={12}/></button>
+                                                        </span>
+                                                    ))}
+                                                    {(!cons.blockedDates || cons.blockedDates.length === 0) && <span className="text-xs text-gray-400 italic">No hay días bloqueados.</span>}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -505,26 +733,88 @@
 
         // --- VISTA PACIENTE ---
 
-        const PatientView = ({ consultorios, appointments, onSave, onCancel }) => {
-            const [step, setStep] = useState(1);
-            const [selectedRoom, setSelectedRoom] = useState(null);
+        const PatientView = ({ consultorios, appointments, onSave, onCancel, initialRoomId, showToast }) => {
+            const [step, setStep] = useState(initialRoomId ? 2 : 1);
+            const [selectedRoom, setSelectedRoom] = useState(initialRoomId || null);
             const [formData, setFormData] = useState({
-                name: '', age: '', phone: '', insurance: ''
+                dni: '', name: '', birthDate: '', phone: '', insurance: ''
             });
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [selectedSlot, setSelectedSlot] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
+            const [showConfirmation, setShowConfirmation] = useState(false);
 
-            // Generar Slots Disponibles (Algoritmo de Agrupamiento)
+            const SHORT_DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+            // Extraer pacientes únicos para autocompletar
+            const knownPatients = useMemo(() => {
+                const map = new Map();
+                appointments.forEach(apt => {
+                    if (apt.dni && !map.has(apt.dni)) {
+                        map.set(apt.dni, apt);
+                    }
+                });
+                return Array.from(map.values());
+            }, [appointments]);
+
+            // Manejar cambio de Link Directo
+            useEffect(() => {
+                if (initialRoomId) {
+                    setSelectedRoom(initialRoomId);
+                    setStep(2);
+                }
+            }, [initialRoomId]);
+
+            const copyLink = (e, roomId) => {
+                e.stopPropagation();
+                const url = window.location.origin + window.location.pathname + '?room=' + roomId;
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast("Link copiado al portapapeles");
+                });
+            };
+
+            const handleDniChange = (e) => {
+                const val = e.target.value;
+                setFormData(prev => ({ ...prev, dni: val }));
+                
+                // Buscar paciente en historial de turnos (Autocompletado instantáneo)
+                const found = knownPatients.find(p => p.dni === val);
+                
+                if (found) {
+                    setFormData(prev => ({
+                        ...prev,
+                        dni: val,
+                        name: found.name,
+                        birthDate: found.birthDate,
+                        phone: found.phone,
+                        insurance: found.insurance
+                    }));
+                    showToast(`¡Hola ${found.name.split(' ')[0]}! Tus datos se cargaron.`, 'success');
+                }
+            };
+
             const availableSlots = useMemo(() => {
                 if (!selectedRoom || !selectedDate) return [];
 
                 const room = consultorios.find(r => r.id === selectedRoom);
-                
+                if (!room) return [];
+
+                // PROTECCIÓN CRÍTICA: Evitar bucle infinito si la duración es 0 o inválida
+                const safeDuration = Number(room.duration);
+                if (!safeDuration || safeDuration < 5) {
+                    return []; 
+                }
+
+                // 1. Chequeo de días bloqueados (Feriados)
+                if (room.blockedDates && room.blockedDates.includes(selectedDate)) {
+                    return [{ blocked: true, reason: 'El consultorio no atiende en esta fecha especial.' }];
+                }
+
                 const [y, m, d] = selectedDate.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d, 12, 0, 0); 
                 const dayOfWeek = dateObj.getDay(); 
 
+                // 2. Chequeo estricto de agenda semanal normal
                 if (!room.days.includes(dayOfWeek)) return []; 
 
                 const slots = [];
@@ -532,60 +822,57 @@
                     a.consultoryId === selectedRoom && a.date === selectedDate
                 );
 
-                let currentTime = room.startHour * 60; // Convertir a minutos
+                let currentTime = room.startHour * 60;
                 const endTime = room.endHour * 60;
 
-                while (currentTime + room.duration <= endTime) {
+                // Bucle protegido usando safeDuration
+                while (currentTime + safeDuration <= endTime) {
                     const startMin = currentTime;
-                    const endMin = currentTime + room.duration;
                     
-                    // Formato HH:MM
                     const formatTime = (min) => {
                         const h = Math.floor(min / 60).toString().padStart(2, '0');
                         const m = (min % 60).toString().padStart(2, '0');
                         return `${h}:${m}`;
                     };
 
-                    const slotLabel = `${formatTime(startMin)} - ${formatTime(endMin)}`;
+                    // MODIFICADO: Solo mostrar hora de inicio
+                    const slotLabel = formatTime(startMin);
                     
-                    // Verificar colisión
-                    const isOccupied = existingApts.some(apt => apt.slot === slotLabel);
+                    const isOccupied = existingApts.some(apt => apt.slot === slotLabel); 
 
                     if (!isOccupied) {
-                        const isAdjacent = existingApts.some(apt => {
-                            const [aptStart, aptEnd] = apt.slot.split(' - ');
-                            return aptEnd === formatTime(startMin) || aptStart === formatTime(endMin);
-                        });
-
+                        // Lógica simplificada de adyacencia
                         slots.push({
                             label: slotLabel,
                             start: startMin,
-                            priority: isAdjacent ? 1 : 0 
+                            priority: 0 
                         });
                     }
-
-                    currentTime += room.duration;
+                    currentTime += safeDuration;
                 }
 
                 return slots.sort((a, b) => {
-                    if (b.priority !== a.priority) return b.priority - a.priority;
                     return a.start - b.start;
                 });
 
             }, [selectedRoom, selectedDate, consultorios, appointments]);
 
-            const handleSubmit = (e) => {
+            const handlePreSubmit = (e) => {
                 e.preventDefault();
                 if (!selectedSlot || !selectedRoom || isSubmitting) return;
+                setShowConfirmation(true);
+            };
 
+            const handleFinalConfirm = () => {
                 setIsSubmitting(true);
-                
-                // Simular delay de red para UX
+                setShowConfirmation(false); 
+
                 setTimeout(() => {
+                    const room = consultorios.find(c => c.id === selectedRoom);
                     const newApt = {
                         id: crypto.randomUUID(),
                         consultoryId: selectedRoom,
-                        consultoryName: consultorios.find(c => c.id === selectedRoom).name,
+                        consultoryName: room.name,
                         ...formData,
                         date: selectedDate,
                         slot: selectedSlot.label,
@@ -601,27 +888,43 @@
                 return (
                     <div className="fade-in">
                         <h2 className="text-2xl font-bold text-gray-800 mb-6">Seleccione un Consultorio</h2>
-                        <div className="grid md:grid-cols-3 gap-6">
+                        <div className="flex flex-wrap gap-6 w-full">
                             {consultorios.map(room => (
-                                <Card key={room.id} className="cursor-pointer hover:border-medical-500 hover:shadow-md transition-all h-full flex flex-col justify-between" onClick={() => { setSelectedRoom(room.id); setStep(2); }}>
+                                <Card 
+                                    key={room.id} 
+                                    className={`cursor-pointer hover:shadow-md transition-all flex flex-col justify-between border-l-4 hover:scale-[1.02] border-l-${room.color || 'blue'}-500 relative group flex-1 min-w-[300px]`} 
+                                    onClick={() => { setSelectedRoom(room.id); setStep(2); }}
+                                >
+                                    <button 
+                                        onClick={(e) => copyLink(e, room.id)}
+                                        className="absolute top-2 right-2 p-2 bg-gray-50 rounded-full text-gray-400 hover:text-medical-600 hover:bg-medical-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Copiar Link Directo"
+                                    >
+                                        <Share2 size={16} />
+                                    </button>
+
                                     <div>
                                         <div className="flex items-center gap-3 mb-3">
-                                            <div className="bg-medical-100 p-2 rounded-lg text-medical-700">
+                                            <div className={`bg-${room.color || 'blue'}-100 p-2 rounded-lg text-${room.color || 'blue'}-600`}>
                                                 <MapPin size={24} />
                                             </div>
                                             <h3 className="font-bold text-lg text-gray-800">{room.name}</h3>
                                         </div>
-                                        <p className="text-gray-500 text-sm mb-2">{room.address}</p>
-                                        <div className="flex flex-wrap gap-1 mb-4">
-                                            {room.insurances.slice(0, 2).map(ins => (
-                                                <span key={ins} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{ins}</span>
-                                            ))}
-                                            {room.insurances.length > 2 && <span className="text-xs text-gray-400 self-center">+{room.insurances.length - 2} más</span>}
+                                        <p className="text-gray-500 text-sm mb-4">{room.address}</p>
+                                        
+                                        <div className="mt-2 text-sm text-gray-600 space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar size={16} className="text-medical-500"/>
+                                                <span className="font-medium">{(room.days || []).map(d => SHORT_DAYS[d]).join(', ') || 'Consultar'}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Clock size={16} className="text-medical-500"/>
+                                                <span className="font-medium">{room.startHour}:00 - {room.endHour}:00 hs</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm text-medical-700 font-medium">
-                                        <span>Turnos de {room.duration} min</span>
-                                        <ChevronRight size={16} />
+                                    <div className={`mt-4 pt-4 border-t border-gray-100 flex justify-end items-center text-sm text-${room.color || 'blue'}-600 font-medium`}>
+                                        <ChevronRight size={20} />
                                     </div>
                                 </Card>
                             ))}
@@ -630,23 +933,104 @@
                 );
             }
 
+            // CORRECCIÓN: Manejo seguro de activeRoom para evitar pantallas en blanco si el ID es incorrecto
             const activeRoom = consultorios.find(r => r.id === selectedRoom);
+            if (!activeRoom) return null; // Retorno temprano si no hay consultorio seleccionado (seguridad)
+
             const DAYS_LABEL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const themeColor = activeRoom.color || 'blue';
+            const isBlockedDate = availableSlots.length === 1 && availableSlots[0].blocked;
 
             return (
                 <div className="max-w-4xl mx-auto fade-in">
-                    <button onClick={() => setStep(1)} className="text-gray-500 hover:text-medical-600 mb-4 flex items-center gap-1 text-sm">
+                    
+                    {/* MODAL DE CONFIRMACIÓN */}
+                    <Modal 
+                        isOpen={showConfirmation} 
+                        onClose={() => setShowConfirmation(false)}
+                        onConfirm={handleFinalConfirm}
+                        title="Confirmar Datos del Turno"
+                        color={themeColor}
+                        confirmText="Confirmar y Reservar"
+                    >
+                        <div className="space-y-4">
+                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <p className="text-sm text-gray-500 mb-1">Paciente</p>
+                                <p className="font-bold text-lg text-gray-900 capitalize">{formData.name}</p>
+                                <div className="flex gap-4 mt-1 text-sm text-gray-600">
+                                    <span>DNI: {formData.dni}</span>
+                                    <span>Cobertura: {formData.insurance}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-4">
+                                <div>
+                                    <p className="text-sm text-gray-500 mb-1">Consultorio y Dirección</p>
+                                    <p className={`font-bold text-lg text-${themeColor}-700`}>{activeRoom.name}</p>
+                                    {/* DIRECCION PRIORIZADA VISUALMENTE */}
+                                    <p className={`text-xl font-extrabold text-${themeColor}-800 mt-1`}>{activeRoom.address}</p>
+                                </div>
+                                <div className="flex justify-between items-center bg-gray-50 p-3 rounded border border-gray-200">
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Fecha</p>
+                                        <p className="font-bold text-gray-900">{formatDateDisplay(selectedDate)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Hora</p>
+                                        <p className={`font-bold text-2xl text-${themeColor}-600`}>{selectedSlot?.label}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded mt-2">
+                                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                                <p>Por favor revise la dirección y el horario antes de confirmar.</p>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    <button onClick={onCancel} className="text-gray-500 hover:text-medical-600 mb-4 flex items-center gap-1 text-sm">
                         &larr; Volver a consultorios
                     </button>
                     
                     <div className="grid md:grid-cols-3 gap-8">
                         {/* Columna Izquierda: Formulario */}
                         <div className="md:col-span-2">
-                            <Card>
-                                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                    <User size={20} className="text-medical-600"/> Datos del Paciente
-                                </h3>
-                                <form id="bookingForm" onSubmit={handleSubmit} className="space-y-4">
+                            <Card className={`border-t-4 border-t-${themeColor}-500`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                        <User size={20} className={`text-${themeColor}-600`}/> Datos del Paciente
+                                    </h3>
+                                    <button onClick={(e) => copyLink(e, activeRoom.id)} className="text-gray-400 hover:text-medical-600" title="Copiar Link Directo">
+                                        <LinkIcon size={18}/>
+                                    </button>
+                                </div>
+                                <form id="bookingForm" onSubmit={handlePreSubmit} className="space-y-4">
+                                    {/* PASO 1: DNI para autocompletar */}
+                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">DNI (Identificación)</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                required 
+                                                list="patient-suggestions"
+                                                type="number" 
+                                                className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
+                                                placeholder="Ingrese DNI para buscar..."
+                                                value={formData.dni} 
+                                                onChange={handleDniChange}
+                                            />
+                                            <datalist id="patient-suggestions">
+                                                {knownPatients.map(p => (
+                                                    <option key={p.dni} value={p.dni}>{p.name}</option>
+                                                ))}
+                                            </datalist>
+                                            <div className="bg-medical-100 text-medical-700 px-3 rounded-lg flex items-center justify-center">
+                                                <Search size={20} />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">Si ya es paciente, sus datos se cargarán automáticamente.</p>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre y Apellido</label>
@@ -654,9 +1038,9 @@
                                                 value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Edad</label>
-                                            <input required type="number" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
-                                                value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} />
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento</label>
+                                            <input required type="date" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
+                                                value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -685,7 +1069,14 @@
 
                                     <div className="mt-4">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Horarios Disponibles</label>
-                                        {availableSlots.length === 0 ? (
+                                        
+                                        {isBlockedDate ? (
+                                             <div className="p-4 bg-red-50 text-red-700 rounded-lg text-center text-sm border border-red-100 flex flex-col items-center gap-1">
+                                                <AlertTriangle size={20} />
+                                                <span className="font-bold">Fecha No Disponible</span>
+                                                <span className="text-xs">{availableSlots[0].reason}</span>
+                                            </div>
+                                        ) : availableSlots.length === 0 ? (
                                             <div className="p-4 bg-orange-50 text-orange-700 rounded-lg text-center text-sm border border-orange-100 flex flex-col items-center gap-1">
                                                 <span className="font-semibold">Sin turnos disponibles</span>
                                                 <span className="text-xs">
@@ -701,10 +1092,10 @@
                                                         onClick={() => setSelectedSlot(slot)}
                                                         className={`text-sm py-2 px-1 rounded-md border transition-colors ${
                                                             selectedSlot?.label === slot.label 
-                                                            ? 'bg-medical-600 text-white border-medical-600 shadow-inner' 
+                                                            ? `bg-${themeColor}-600 text-white border-${themeColor}-600 shadow-inner` 
                                                             : slot.priority === 1 
-                                                                ? 'bg-medical-50 text-medical-800 border-medical-200 hover:bg-medical-100' // Agrupado (sugerido)
-                                                                : 'bg-white text-gray-700 border-gray-200 hover:border-medical-300'
+                                                                ? `bg-${themeColor}-50 text-${themeColor}-800 border-${themeColor}-200 hover:bg-${themeColor}-100`
+                                                                : `bg-white text-gray-700 border-gray-200 hover:border-${themeColor}-300`
                                                         }`}
                                                     >
                                                         {slot.label}
@@ -712,8 +1103,8 @@
                                                 ))}
                                             </div>
                                         )}
-                                        {availableSlots.some(s => s.priority === 1) && (
-                                            <p className="text-xs text-medical-600 mt-2 flex items-center gap-1">
+                                        {availableSlots.some(s => s.priority === 1) && !isBlockedDate && (
+                                            <p className={`text-xs text-${themeColor}-600 mt-2 flex items-center gap-1`}>
                                                 <Clock size={12}/> Los horarios resaltados optimizan la agenda.
                                             </p>
                                         )}
@@ -724,35 +1115,45 @@
 
                         {/* Columna Derecha: Resumen */}
                         <div>
-                            <Card className="bg-medical-50 border-medical-200 h-full sticky top-24">
-                                <h3 className="font-bold text-medical-900 mb-4">Resumen del Turno</h3>
+                            <Card className={`bg-gray-50 border-gray-200 h-full sticky top-24`}>
+                                <h3 className="font-bold text-gray-900 mb-4">Resumen del Turno</h3>
                                 <div className="space-y-3 text-sm">
-                                    <div className="flex justify-between border-b border-medical-200 pb-2">
-                                        <span className="text-medical-700">Consultorio:</span>
-                                        <span className="font-medium text-right w-1/2">{activeRoom.name}</span>
+                                    <div className="border-b border-gray-200 pb-3">
+                                        <span className="text-gray-500 block text-xs uppercase font-semibold">Consultorio</span>
+                                        <span className={`font-bold text-lg text-${themeColor}-700 block`}>{activeRoom.name}</span>
+                                        {/* DIRECCION PRIORIZADA */}
+                                        <span className={`font-bold text-base text-${themeColor}-900 block mt-1`}>{activeRoom.address}</span>
                                     </div>
-                                    <div className="flex justify-between border-b border-medical-200 pb-2">
-                                        <span className="text-medical-700">Fecha:</span>
+                                    <div className="flex justify-between border-b border-gray-200 pb-2">
+                                        <span className="text-gray-600">Fecha:</span>
                                         <span className="font-medium">{formatDateDisplay(selectedDate)}</span>
                                     </div>
-                                    <div className="flex justify-between border-b border-medical-200 pb-2">
-                                        <span className="text-medical-700">Horario:</span>
-                                        <span className={`font-bold ${selectedSlot ? 'text-medical-800' : 'text-gray-400'}`}>
+                                    <div className="flex justify-between border-b border-gray-200 pb-2">
+                                        <span className="text-gray-600">Horario:</span>
+                                        <span className={`font-bold ${selectedSlot ? `text-${themeColor}-800` : 'text-gray-400'}`}>
                                             {selectedSlot ? selectedSlot.label : '--:--'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between pt-2">
-                                        <span className="text-medical-700">Paciente:</span>
+                                        <span className="text-gray-600">Paciente:</span>
                                         <span className="font-medium truncate">{formData.name || '-'}</span>
                                     </div>
                                 </div>
 
                                 <div className="mt-8">
-                                    <Button fullWidth onClick={handleSubmit} disabled={!selectedSlot || !formData.name || isSubmitting}>
-                                        {isSubmitting ? 'Confirmando...' : 'Confirmar Turno'}
-                                    </Button>
+                                    <button 
+                                        onClick={handlePreSubmit} 
+                                        disabled={!selectedSlot || !formData.name || isSubmitting}
+                                        className={`w-full py-3 rounded-lg font-bold text-white shadow-md transition-all ${
+                                            !selectedSlot || !formData.name || isSubmitting 
+                                            ? 'bg-gray-300 cursor-not-allowed' 
+                                            : `bg-${themeColor}-600 hover:bg-${themeColor}-700`
+                                        }`}
+                                    >
+                                        {isSubmitting ? 'Procesando...' : 'Confirmar Turno'}
+                                    </button>
                                     <p className="text-xs text-center text-gray-500 mt-3">
-                                        Al confirmar, los datos se guardarán localmente primero.
+                                        Se abrirá una ventana de confirmación antes de reservar.
                                     </p>
                                 </div>
                             </Card>
@@ -764,9 +1165,13 @@
 
         // --- VISTA PROFESIONAL ---
 
-        const ProfessionalView = ({ consultorios, appointments }) => {
+        const ProfessionalView = ({ consultorios, appointments, onAdmin, toggleConfirmation }) => {
             const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
             const [filterRoom, setFilterRoom] = useState('all');
+            const [expandedAptId, setExpandedAptId] = useState(null); // Nuevo estado para expandir tarjeta
+            
+            // Estado para el modal de WhatsApp
+            const [whatsappModal, setWhatsappModal] = useState({ isOpen: false, data: null, message: '' });
 
             const filteredAppointments = useMemo(() => {
                 return appointments
@@ -778,26 +1183,67 @@
                     .sort((a, b) => a.slot.localeCompare(b.slot));
             }, [appointments, filterDate, filterRoom]);
 
+            const handleWhatsAppClick = (apt) => {
+                // Crear mensaje predeterminado
+                const defaultMsg = `Hola ${apt.name}, le escribo desde los Consultorios Dra. Abraldes para confirmar su turno del día ${formatDateDisplay(apt.date)} a las ${apt.slot}hs en ${apt.consultoryName}. Por favor confirmar asistencia. Muchas gracias.`;
+                setWhatsappModal({ isOpen: true, data: apt, message: defaultMsg });
+            };
+
+            const sendWhatsApp = () => {
+                if (!whatsappModal.data) return;
+                const phone = whatsappModal.data.phone.replace(/\D/g,''); // Solo números
+                const text = encodeURIComponent(whatsappModal.message);
+                window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+                setWhatsappModal({ isOpen: false, data: null, message: '' });
+            };
+
             return (
                 <div className="fade-in space-y-6">
+                    {/* MODAL WHATSAPP */}
+                    <Modal 
+                        isOpen={whatsappModal.isOpen} 
+                        onClose={() => setWhatsappModal({ ...whatsappModal, isOpen: false })} 
+                        onConfirm={sendWhatsApp}
+                        title="Enviar Recordatorio WhatsApp"
+                        color="emerald"
+                        confirmText="Enviar Mensaje"
+                    >
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-600">Puede editar el mensaje antes de enviarlo:</p>
+                            <textarea 
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none h-32"
+                                value={whatsappModal.message}
+                                onChange={(e) => setWhatsappModal({ ...whatsappModal, message: e.target.value })}
+                            />
+                            <div className="text-xs text-gray-500 flex justify-between">
+                                <span>Destinatario: {whatsappModal.data?.name}</span>
+                                <span>Tel: {whatsappModal.data?.phone}</span>
+                            </div>
+                        </div>
+                    </Modal>
+
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold text-gray-800">Agenda Médica</h2>
                         
-                        <div className="flex gap-3 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
-                            <input 
-                                type="date" 
-                                className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none"
-                                value={filterDate}
-                                onChange={(e) => setFilterDate(e.target.value)}
-                            />
-                            <select 
-                                className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none bg-white"
-                                value={filterRoom}
-                                onChange={(e) => setFilterRoom(e.target.value)}
-                            >
-                                <option value="all">Todos los Consultorios</option>
-                                {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                        <div className="flex gap-2">
+                            <Button onClick={onAdmin} variant="secondary" icon={Settings}>Consultorios</Button>
+                            
+                            <div className="flex gap-3 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+                                <input 
+                                    type="date" 
+                                    className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none"
+                                    value={filterDate}
+                                    onChange={(e) => setFilterDate(e.target.value)}
+                                />
+                                <select 
+                                    className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none bg-white"
+                                    value={filterRoom}
+                                    onChange={(e) => setFilterRoom(e.target.value)}
+                                >
+                                    <option value="all">Todos los Consultorios</option>
+                                    {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -810,12 +1256,8 @@
                                     <p className="text-3xl font-bold">{filteredAppointments.length}</p>
                                 </div>
                                 <div className="border-l border-medical-400 pl-8">
-                                    <p className="text-medical-100 text-sm font-medium">Consultorios Activos</p>
-                                    <p className="text-3xl font-bold">
-                                        {filterRoom === 'all' 
-                                            ? new Set(filteredAppointments.map(a => a.consultoryId)).size 
-                                            : (filteredAppointments.length > 0 ? 1 : 0)}
-                                    </p>
+                                    <p className="text-medical-100 text-sm font-medium">Confirmados</p>
+                                    <p className="text-3xl font-bold">{filteredAppointments.filter(a => a.confirmedByProfessional).length}</p>
                                 </div>
                                 <div className="border-l border-medical-400 pl-8 hidden sm:block">
                                     <p className="text-medical-100 text-sm font-medium">Obras Sociales</p>
@@ -842,24 +1284,63 @@
                                 ) : (
                                     <div className="divide-y divide-gray-100">
                                         {filteredAppointments.map(apt => (
-                                            <div key={apt.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div className="flex items-start gap-4">
-                                                    <div className="bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px]">
-                                                        {apt.slot}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-gray-900">{apt.name} <span className="text-xs font-normal text-gray-500">({apt.age} años)</span></h4>
-                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
-                                                            <span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span>
-                                                            <span className="flex items-center gap-1"><Stethoscope size={14}/> {apt.insurance}</span>
+                                            <div key={apt.id} className="border-b border-gray-100 last:border-0">
+                                                <div 
+                                                    className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${expandedAptId === apt.id ? 'bg-gray-50' : ''}`}
+                                                    onClick={() => setExpandedAptId(expandedAptId === apt.id ? null : apt.id)}
+                                                >
+                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                        <div className="flex items-start gap-4">
+                                                            <div className="bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px]">
+                                                                {apt.slot}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                                                                    {apt.name}
+                                                                    {expandedAptId === apt.id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+                                                                </h4>
+                                                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
+                                                                    <span className="flex items-center gap-1 font-medium text-gray-700">DNI: {apt.dni || '-'}</span>
+                                                                    <span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 md:justify-end" onClick={e => e.stopPropagation()}>
+                                                            {/* Botón WhatsApp */}
+                                                            <button 
+                                                                onClick={() => handleWhatsAppClick(apt)} 
+                                                                className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors" 
+                                                                title="Enviar WhatsApp"
+                                                            >
+                                                                <MessageCircle size={18} />
+                                                            </button>
+                                                            
+                                                            {/* Botón Confirmación */}
+                                                            <button 
+                                                                onClick={() => toggleConfirmation(apt.id)}
+                                                                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                                                                    apt.confirmedByProfessional 
+                                                                    ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' 
+                                                                    : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'
+                                                                }`}
+                                                                title={apt.confirmedByProfessional ? "Click para quitar confirmación" : "Click para confirmar asistencia"}
+                                                            >
+                                                                {apt.confirmedByProfessional ? <CheckCircle2 size={14}/> : <Clock size={14}/>}
+                                                                {apt.confirmedByProfessional ? "Confirmado" : "Reservado"}
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-3 md:justify-end">
-                                                    <a href={`tel:${apt.phone}`} className="p-2 text-gray-400 hover:text-medical-600 hover:bg-medical-50 rounded-full transition-colors" title="Llamar">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                                                    </a>
-                                                    <span className="text-xs font-medium px-2 py-1 bg-green-100 text-green-700 rounded-full">Confirmado</span>
+
+                                                    {/* DETALLES EXPANDIDOS */}
+                                                    {expandedAptId === apt.id && (
+                                                        <div className="mt-4 pl-0 md:pl-[96px] text-sm text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 animate-fadeIn border-t border-gray-200 pt-4">
+                                                            <p><span className="font-semibold text-gray-700">Teléfono:</span> {apt.phone}</p>
+                                                            <p><span className="font-semibold text-gray-700">Fecha Nacimiento:</span> {formatDateDisplay(apt.birthDate)} ({calculateAge(apt.birthDate)} años)</p>
+                                                            <p><span className="font-semibold text-gray-700">Cobertura:</span> {apt.insurance}</p>
+                                                            <p><span className="font-semibold text-gray-700">DNI Completo:</span> {apt.dni}</p>
+                                                            <p className="md:col-span-2 text-xs text-gray-400 mt-2">ID Turno: {apt.id}</p>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
