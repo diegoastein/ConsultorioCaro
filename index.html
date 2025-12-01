@@ -75,7 +75,7 @@
         import { getFirestore, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // --- VARIABLES Y CONFIGURACIÓN DE FIREBASE PARA GITHUB PAGES ---
+        // --- VARIABLES Y CONFIGURACIÓN DE FIREBASE (COMPATIBLE CON CANVAS Y GITHUB PAGES) ---
         
         // 🚨 IMPORTANTE: Si subes esto a GitHub Pages o a un entorno externo, 
         // DEBES reemplazar el contenido de este objeto con tu configuración real de Firebase.
@@ -84,7 +84,22 @@
         const FIREBASE_API_KEY_PLACEHOLDER = "TU_API_KEY_AQUI";
         const FIREBASE_PROJECT_ID_PLACEHOLDER = "TU_PROJECT_ID";
 
-        const firebaseConfig = {
+        // 1. Detección de entorno
+        const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
+        
+        let firebaseConfig;
+        let appId;
+        let initialAuthToken;
+        let authReadyCheck = false; // Flag para manejar el estado de Auth
+
+        if (isCanvasEnvironment) {
+            // Entorno CANVAS: Usar variables globales inyectadas.
+            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+            initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        } else {
+            // Entorno EXTERNO (GitHub Pages): Usar la configuración manual.
+            const firebaseConfig = {
   apiKey: "AIzaSyDI9Jk2skbIshHQO-yPhQjEO4NyK3JSlc4",
   authDomain: "registroconsul.firebaseapp.com",
   projectId: "registroconsul",
@@ -92,27 +107,22 @@
   messagingSenderId: "948108455494",
   appId: "1:948108455494:web:78e3071201eb9751c22447"
 };
-            // Para encontrar estos valores, ve a la Consola de Firebase, selecciona tu proyecto, y haz clic en "Configuración del proyecto" (el ícono de engranaje).
-        };
-
-        // Para entornos externos, usamos el Project ID o el appId del objeto de configuración.
-        const appId = firebaseConfig.projectId; 
+            appId = firebaseConfig.projectId;
+            initialAuthToken = null; 
+        }
         
-        // El token de autenticación inicial (para el entorno Canvas) se ignora para GitHub Pages.
-        const initialAuthToken = null; 
-
         // Inicialización de Firebase
         setLogLevel('debug');
         
-        // Bloque de Inicialización. Solo se llama si las credenciales parecen válidas.
         let app, db, auth;
-        if (firebaseConfig.apiKey !== FIREBASE_API_KEY_PLACEHOLDER && firebaseConfig.projectId !== FIREBASE_PROJECT_ID_PLACEHOLDER) {
+        // Solo inicializamos si la API key no es el placeholder (o si estamos en Canvas, ya que el API key real se inyecta)
+        if (firebaseConfig.apiKey !== FIREBASE_API_KEY_PLACEHOLDER || isCanvasEnvironment) {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app); // Base de Datos Firestore
             auth = getAuth(app);    // Servicio de Autenticación
         }
 
-        // Referencias a colecciones públicas (para datos compartidos)
+        // Referencias a colecciones públicas (Añadida comprobación de 'db' por seguridad)
         const getClinicsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'clinics') : null;
         const getAppointmentsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'appointments') : null;
 
@@ -138,8 +148,8 @@
         // --- AUTENTICACIÓN Y SETUP INICIAL ---
 
         async function authenticateUser() {
-            // NUEVA COMPROBACIÓN: Si la configuración no se ha sustituido, mostramos el error de la UI.
-            if (firebaseConfig.apiKey === FIREBASE_API_KEY_PLACEHOLDER || firebaseConfig.projectId === FIREBASE_PROJECT_ID_PLACEHOLDER) {
+            // COMPROBACIÓN: Si la configuración externa no se ha sustituido, mostramos el error de la UI.
+            if (!isCanvasEnvironment && firebaseConfig.apiKey === FIREBASE_API_KEY_PLACEHOLDER) {
                  loadingEl.classList.add('hidden');
                  contentAreaEl.innerHTML = `
                     <div class="config-error">
@@ -155,14 +165,19 @@
             }
 
             try {
-                // Para GitHub Pages, siempre iniciamos sesión de forma anónima, 
-                // ya que no tenemos un token de usuario autenticado.
-                await signInAnonymously(auth);
-                
+                if (initialAuthToken) {
+                    // Autenticación para usuarios de Canvas (usa el token inyectado)
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    // Autenticación anónima (para pacientes web o Canvas sin token)
+                    await signInAnonymously(auth);
+                }
             } catch (error) {
                 console.error("Error durante la autenticación:", error);
                 authStatusEl.textContent = 'Estado: Error de Autenticación';
                 userIdDisplayEl.textContent = 'ID de Usuario: (Fallo en Firebase)';
+                // Si la autenticación falla, es un error de credenciales, pero continuamos con setupFirestoreListeners() 
+                // para que la UI al menos intente cargar si hay datos almacenados previamente (aunque fallará al intentar leer/escribir).
             }
         }
 
@@ -171,17 +186,17 @@
                 userId = user.uid;
                 authStatusEl.textContent = 'Estado: Conectado (Gestión)';
                 userIdDisplayEl.textContent = `ID de Usuario: ${userId}`;
-                isAuthReady = true;
-                
-                setupFirestoreListeners();
             } else {
                 authStatusEl.textContent = 'Estado: Desconectado';
                 userIdDisplayEl.textContent = 'ID de Usuario: (Anónimo)';
-                isAuthReady = true; 
-                
-                setupFirestoreListeners(); 
             }
-            loadingEl.classList.add('hidden');
+            
+            if (!authReadyCheck) { // Ejecutar listeners solo una vez al finalizar el primer chequeo
+                 isAuthReady = true;
+                 setupFirestoreListeners();
+                 loadingEl.classList.add('hidden');
+                 authReadyCheck = true;
+            }
         });
 
         // Llamar a autenticar al cargar
@@ -190,7 +205,7 @@
         // --- LISTENERS DE FIRESTORE (REEMPLAZANDO LOCAL STORAGE) ---
 
         function setupFirestoreListeners() {
-             if (!db) return; // Si la inicialización falló por credenciales, salir.
+             if (!db || !isAuthReady) return; // Si la inicialización falló o la Auth no está lista, salir.
 
             // 1. Escuchar Consultorios (Clinics)
             onSnapshot(getClinicsRef(), (snapshot) => {
@@ -211,6 +226,7 @@
                 }
             }, (error) => {
                 console.error("Error al escuchar consultorios:", error);
+                showMessage(`Error al cargar consultorios: ${error.message}`, true);
             });
 
             // 2. Escuchar Turnos (Appointments)
@@ -228,6 +244,7 @@
                 renderCurrentView(); 
             }, (error) => {
                 console.error("Error al escuchar turnos:", error);
+                showMessage(`Error al cargar turnos: ${error.message}`, true);
             });
         }
 
@@ -1215,7 +1232,7 @@
 
             // 1. Crear el objeto de fecha/hora (y validar rápidamente si el slot sigue libre)
             const [year, month, day] = dateStr.split('-').map(Number);
-            const [hour, minute] = timeStr.split(':'.map(Number);
+            const [hour, minute] = timeStr.split(':').map(Number);
             const localDateTime = new Date(year, month - 1, day, hour, minute);
 
             const selectedClinic = clinics.find(c => c.id === clinicId);
