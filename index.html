@@ -57,6 +57,15 @@
         .btn-edit:hover { background-color: #FBBF24; color: #78350F; }
         .btn-share { background-color: #3B82F6; color: white; }
         .btn-share:hover { background-color: #2563EB; }
+        .config-error {
+            border: 2px solid theme('colors.red.400');
+            background-color: theme('colors.red.100');
+            color: theme('colors.red.800');
+            padding: 2rem;
+            border-radius: 0.75rem;
+            margin-top: 2rem;
+            text-align: center;
+        }
 
     </style>
     <!-- Firebase SDKs para la persistencia de datos (Firestore) y autenticación -->
@@ -66,22 +75,46 @@
         import { getFirestore, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // --- CONSTANTES Y VARIABLES GLOBALES (incluyendo Firebase) ---
+        // --- VARIABLES Y CONFIGURACIÓN DE FIREBASE PARA GITHUB PAGES ---
         
-        // Variables globales provistas por el entorno (MANDATORIAS)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // 🚨 IMPORTANTE: Si subes esto a GitHub Pages o a un entorno externo, 
+        // DEBES reemplazar el contenido de este objeto con tu configuración real de Firebase.
+        // Consulta la configuración de tu proyecto en la Consola de Firebase -> Configuración del proyecto.
+
+        const FIREBASE_API_KEY_PLACEHOLDER = "TU_API_KEY_AQUI";
+        const FIREBASE_PROJECT_ID_PLACEHOLDER = "TU_PROJECT_ID";
+
+        const firebaseConfig = {
+  apiKey: "AIzaSyDI9Jk2skbIshHQO-yPhQjEO4NyK3JSlc4",
+  authDomain: "registroconsul.firebaseapp.com",
+  projectId: "registroconsul",
+  storageBucket: "registroconsul.firebasestorage.app",
+  messagingSenderId: "948108455494",
+  appId: "1:948108455494:web:78e3071201eb9751c22447"
+};
+            // Para encontrar estos valores, ve a la Consola de Firebase, selecciona tu proyecto, y haz clic en "Configuración del proyecto" (el ícono de engranaje).
+        };
+
+        // Para entornos externos, usamos el Project ID o el appId del objeto de configuración.
+        const appId = firebaseConfig.projectId; 
+        
+        // El token de autenticación inicial (para el entorno Canvas) se ignora para GitHub Pages.
+        const initialAuthToken = null; 
 
         // Inicialización de Firebase
         setLogLevel('debug');
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        
+        // Bloque de Inicialización. Solo se llama si las credenciales parecen válidas.
+        let app, db, auth;
+        if (firebaseConfig.apiKey !== FIREBASE_API_KEY_PLACEHOLDER && firebaseConfig.projectId !== FIREBASE_PROJECT_ID_PLACEHOLDER) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app); // Base de Datos Firestore
+            auth = getAuth(app);    // Servicio de Autenticación
+        }
 
         // Referencias a colecciones públicas (para datos compartidos)
-        const getClinicsRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'clinics');
-        const getAppointmentsRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'appointments');
+        const getClinicsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'clinics') : null;
+        const getAppointmentsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'appointments') : null;
 
         // Días de la semana: 0=Domingo, 1=Lunes, ..., 6=Sábado
         const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -105,14 +138,31 @@
         // --- AUTENTICACIÓN Y SETUP INICIAL ---
 
         async function authenticateUser() {
+            // NUEVA COMPROBACIÓN: Si la configuración no se ha sustituido, mostramos el error de la UI.
+            if (firebaseConfig.apiKey === FIREBASE_API_KEY_PLACEHOLDER || firebaseConfig.projectId === FIREBASE_PROJECT_ID_PLACEHOLDER) {
+                 loadingEl.classList.add('hidden');
+                 contentAreaEl.innerHTML = `
+                    <div class="config-error">
+                        <h3 class="text-2xl font-bold mb-4">🚨 ¡ERROR CRÍTICO DE CONFIGURACIÓN!</h3>
+                        <p>Para que la aplicación funcione en GitHub Pages, debes reemplazar las credenciales en el objeto <code>firebaseConfig</code> al inicio del código.</p>
+                        <p class="mt-2 font-semibold">Por favor, edita el archivo e inserta tu <code>apiKey</code> y <code>projectId</code> reales de Firebase.</p>
+                        <p class="mt-4 text-sm text-red-600">La aplicación no puede inicializarse sin credenciales válidas.</p>
+                    </div>
+                 `;
+                 authStatusEl.textContent = 'Estado: CONFIGURACIÓN PENDIENTE';
+                 userIdDisplayEl.textContent = 'ID de Usuario: (CONFIGURACIÓN INVÁLIDA)';
+                 return;
+            }
+
             try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // Para GitHub Pages, siempre iniciamos sesión de forma anónima, 
+                // ya que no tenemos un token de usuario autenticado.
+                await signInAnonymously(auth);
+                
             } catch (error) {
                 console.error("Error durante la autenticación:", error);
+                authStatusEl.textContent = 'Estado: Error de Autenticación';
+                userIdDisplayEl.textContent = 'ID de Usuario: (Fallo en Firebase)';
             }
         }
 
@@ -127,9 +177,8 @@
             } else {
                 authStatusEl.textContent = 'Estado: Desconectado';
                 userIdDisplayEl.textContent = 'ID de Usuario: (Anónimo)';
-                isAuthReady = true; // Permite que la app cargue (las vistas públicas funcionarán)
+                isAuthReady = true; 
                 
-                // Si la autenticación falla, aún necesitamos cargar los datos para las vistas públicas
                 setupFirestoreListeners(); 
             }
             loadingEl.classList.add('hidden');
@@ -141,6 +190,8 @@
         // --- LISTENERS DE FIRESTORE (REEMPLAZANDO LOCAL STORAGE) ---
 
         function setupFirestoreListeners() {
+             if (!db) return; // Si la inicialización falló por credenciales, salir.
+
             // 1. Escuchar Consultorios (Clinics)
             onSnapshot(getClinicsRef(), (snapshot) => {
                 clinics = snapshot.docs.map(doc => ({ 
@@ -1164,7 +1215,7 @@
 
             // 1. Crear el objeto de fecha/hora (y validar rápidamente si el slot sigue libre)
             const [year, month, day] = dateStr.split('-').map(Number);
-            const [hour, minute] = timeStr.split(':').map(Number);
+            const [hour, minute] = timeStr.split(':'.map(Number);
             const localDateTime = new Date(year, month - 1, day, hour, minute);
 
             const selectedClinic = clinics.find(c => c.id === clinicId);
