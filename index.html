@@ -3,1438 +3,877 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda de Consultorios Online</title>
-    <!-- Carga de Tailwind CSS para un diseño limpio y responsivo -->
+    <title>Consultorios dra. Abraldes - Gestión de Turnos</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Configuración de color suave para el tema verde -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'soft-green': '#A7F3D0', // Verde menta suave para botones/títulos
-                        'dark-green': '#065F46', // Verde oscuro para texto
-                        'background-light': '#F9FAFB', // Fondo muy claro
-                        'primary': '#059669', // Verde primario para foco
-                        'accent': '#10B981', // Verde acentuado
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        medical: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            900: '#134e4a',
+                        }
                     }
                 }
             }
         }
     </script>
+
+    <!-- Import Map for React, ReactDOM, Lucide and Firebase structure -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+        }
+    }
+    </script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
-        /* Estilos personalizados para el fondo claro y la fuente */
-        body {
-            background-color: theme('colors.background-light');
-            font-family: theme('fontFamily.sans');
-            color: theme('colors.dark-green');
-        }
-        /* Clase para el color de los elementos de acción/título */
-        .header-title, .action-button, .nav-item {
-            background-color: theme('colors.soft-green');
-            color: theme('colors.dark-green');
-            font-weight: 600;
-        }
-        .action-button:hover, .nav-item:hover {
-            background-color: theme('colors.primary');
-            color: white;
-        }
-        .card {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-        }
-        .appointment-item {
-            background-color: #ECFDF5;
-            border-left: 4px solid theme('colors.primary');
-        }
-        .schedule-info-box {
-            background-color: theme('colors.soft-green'); 
-            border-left: 4px solid theme('colors.primary');
-        }
-        .btn-edit { background-color: #FCD34D; color: #854D0E; }
-        .btn-edit:hover { background-color: #FBBF24; color: #78350F; }
-        .btn-share { background-color: #3B82F6; color: white; }
-        .btn-share:hover { background-color: #2563EB; }
-        .config-error {
-            border: 2px solid theme('colors.red.400');
-            background-color: theme('colors.red.100');
-            color: theme('colors.red.800');
-            padding: 2rem;
-            border-radius: 0.75rem;
-            margin-top: 2rem;
-            text-align: center;
-        }
-
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #f0fdfa; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Hide scrollbar for clean UI */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
-    <!-- Firebase SDKs para la persistencia de datos (Firestore) y autenticación -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save } from 'lucide-react';
         
-        // --- VARIABLES Y CONFIGURACIÓN DE FIREBASE (COMPATIBLE CON CANVAS Y GITHUB PAGES) ---
-        
-        // 🚨 IMPORTANTE: Si subes esto a GitHub Pages o a un entorno externo, 
-        // DEBES reemplazar el contenido de este objeto con tu configuración real de Firebase.
-        // Consulta la configuración de tu proyecto en la Consola de Firebase -> Configuración del proyecto.
+        // --- CONFIGURACIÓN DE FIREBASE SIMPLIFICADA ---
+        // INSTRUCCIONES: Reemplaza los valores abajo con los de tu consola de Firebase
+        const manualConfig = {
+            apiKey: "TU_API_KEY_AQUI", 
+            authDomain: "tu-proyecto.firebaseapp.com",
+            projectId: "tu-proyecto",
+            storageBucket: "tu-proyecto.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
 
-        const FIREBASE_API_KEY_PLACEHOLDER = "AIzaSyDI9Jk2skbIshHQO-yPhQjEO4NyK3JSlc4";
-        const FIREBASE_PROJECT_ID_PLACEHOLDER = "registroconsul";
-
-        // 1. Detección de entorno
-        const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
-        
-        let firebaseConfig;
-        let appId;
-        let initialAuthToken;
-        let authReadyCheck = false; // Flag para manejar el estado de Auth
-
-        if (isCanvasEnvironment) {
-            // Entorno CANVAS: Usar variables globales inyectadas.
-            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-            appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
-            initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        } else {
-            // Entorno EXTERNO (GitHub Pages): Usar la configuración manual.
-            const firebaseConfig = {
-  apiKey: "AIzaSyDI9Jk2skbIshHQO-yPhQjEO4NyK3JSlc4",
-  authDomain: "registroconsul.firebaseapp.com",
-  projectId: "registroconsul",
-  storageBucket: "registroconsul.firebasestorage.app",
-  messagingSenderId: "948108455494",
-  appId: "1:948108455494:web:78e3071201eb9751c22447"
-};
-        
-        // Inicialización de Firebase
-        setLogLevel('debug');
-        
-        let app, db, auth;
-        // Solo inicializamos si la API key no es el placeholder (o si estamos en Canvas, ya que el API key real se inyecta)
-        if (firebaseConfig.apiKey !== FIREBASE_API_KEY_PLACEHOLDER || isCanvasEnvironment) {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app); // Base de Datos Firestore
-            auth = getAuth(app);    // Servicio de Autenticación
-        }
-
-        // Referencias a colecciones públicas (Añadida comprobación de 'db' por seguridad)
-        const getClinicsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'clinics') : null;
-        const getAppointmentsRef = () => db ? collection(db, 'artifacts', appId, 'public', 'data', 'appointments') : null;
-
-        // Días de la semana: 0=Domingo, 1=Lunes, ..., 6=Sábado
-        const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        const WORK_DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-
-        let clinics = [];        
-        let appointments = [];   
-        let currentClinicId = null; 
-        let currentViewDate = new Date(); 
-        let userId = null;
-        let isAuthReady = false;
-
-        // Referencias a elementos del DOM (Auth)
-        const authStatusEl = document.getElementById('auth-status');
-        const userIdDisplayEl = document.getElementById('user-id-display');
-        const loadingEl = document.getElementById('loading-message');
-        const clinicSelectEl = document.getElementById('clinic-select');
-        const contentAreaEl = document.getElementById('content-area');
-
-
-        // --- AUTENTICACIÓN Y SETUP INICIAL ---
-
-        async function authenticateUser() {
-            // COMPROBACIÓN: Si la configuración externa no se ha sustituido, mostramos el error de la UI.
-            if (!isCanvasEnvironment && firebaseConfig.apiKey === FIREBASE_API_KEY_PLACEHOLDER) {
-                 loadingEl.classList.add('hidden');
-                 contentAreaEl.innerHTML = `
-                    <div class="config-error">
-                        <h3 class="text-2xl font-bold mb-4">🚨 ¡ERROR CRÍTICO DE CONFIGURACIÓN!</h3>
-                        <p>Para que la aplicación funcione en GitHub Pages, debes reemplazar las credenciales en el objeto <code>firebaseConfig</code> al inicio del código.</p>
-                        <p class="mt-2 font-semibold">Por favor, edita el archivo e inserta tu <code>apiKey</code> y <code>projectId</code> reales de Firebase.</p>
-                        <p class="mt-4 text-sm text-red-600">La aplicación no puede inicializarse sin credenciales válidas.</p>
-                    </div>
-                 `;
-                 authStatusEl.textContent = 'Estado: CONFIGURACIÓN PENDIENTE';
-                 userIdDisplayEl.textContent = 'ID de Usuario: (CONFIGURACIÓN INVÁLIDA)';
-                 return;
+        // --- MODELO DE DATOS INICIAL (DEFAULT) ---
+        const DEFAULT_CONSULTORIOS = [
+            {
+                id: 1,
+                name: "Consultorio Central",
+                address: "Av. Corrientes 1234, PB",
+                days: [1, 2, 3, 4, 5], // Lun-Vie
+                startHour: 9,
+                endHour: 17,
+                duration: 30, // minutos
+                insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"]
+            },
+            {
+                id: 2,
+                name: "Clínica Norte",
+                address: "Calle 14 Nro 500, San Martín",
+                days: [1, 3, 5], // Lun, Mie, Vie
+                startHour: 14,
+                endHour: 20,
+                duration: 20,
+                insurances: ["IOMA", "PAMI", "Particular"]
+            },
+            {
+                id: 3,
+                name: "Consultorio Pediatría",
+                address: "Mitre 880, 1ro A",
+                days: [2, 4], // Mar, Jue
+                startHour: 10,
+                endHour: 16,
+                duration: 45,
+                insurances: ["Todas las Obras Sociales"]
             }
-
-            try {
-                if (initialAuthToken) {
-                    // Autenticación para usuarios de Canvas (usa el token inyectado)
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    // Autenticación anónima (para pacientes web o Canvas sin token)
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Error durante la autenticación:", error);
-                authStatusEl.textContent = 'Estado: Error de Autenticación';
-                userIdDisplayEl.textContent = 'ID de Usuario: (Fallo en Firebase)';
-            }
-        }
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                userId = user.uid;
-                authStatusEl.textContent = 'Estado: Conectado (Gestión)';
-                userIdDisplayEl.textContent = `ID de Usuario: ${userId}`;
-            } else {
-                userId = null; // Asegurar que userId es nulo si no hay usuario
-                authStatusEl.textContent = 'Estado: Desconectado';
-                userIdDisplayEl.textContent = 'ID de Usuario: (Anónimo)';
-            }
-            
-            if (!authReadyCheck) { // Ejecutar listeners solo una vez al finalizar el primer chequeo
-                 isAuthReady = true;
-                 // **AJUSTE CRÍTICO APLICADO AQUÍ**
-                 // Intentamos configurar listeners solo si hay una base de datos inicializada
-                 if (db) { 
-                     setupFirestoreListeners();
-                 } else {
-                     // Esto ocurre si las credenciales de GH Pages son incorrectas/faltan.
-                     loadingEl.classList.add('hidden');
-                 }
-                 loadingEl.classList.add('hidden');
-                 authReadyCheck = true;
-            }
-        });
-
-        // Llamar a autenticar al cargar
-        authenticateUser();
-
-        // --- LISTENERS DE FIRESTORE (REEMPLAZANDO LOCAL STORAGE) ---
-
-        function setupFirestoreListeners() {
-             // Ahora solo se llama si db está inicializado Y la auth ha terminado su primer chequeo.
-             if (!db || !isAuthReady) return; 
-
-            // 1. Escuchar Consultorios (Clinics)
-            onSnapshot(getClinicsRef(), (snapshot) => {
-                clinics = snapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    ...doc.data(),
-                    appointmentDuration: doc.data().appointmentDuration || 30 // Asegurar duración
-                }));
-                
-                if (clinics.length === 0) {
-                    showView('manage-clinics');
-                } else {
-                    if (!currentClinicId || !clinics.some(c => c.id === currentClinicId)) {
-                        currentClinicId = clinics[0].id;
-                    }
-                    renderClinicSelector();
-                    renderCurrentView(); 
-                }
-            }, (error) => {
-                console.error("Error al escuchar consultorios:", error);
-                showMessage(`Error al cargar consultorios: ${error.message}. Verifica las Reglas de Seguridad.`, true);
-            });
-
-            // 2. Escuchar Turnos (Appointments)
-            onSnapshot(getAppointmentsRef(), (snapshot) => {
-                appointments = snapshot.docs.map(doc => ({ 
-                    id: doc.id, 
-                    ...doc.data(),
-                    dateTime: doc.data().dateTime.toDate() 
-                }));
-                
-                const now = new Date();
-                appointments = appointments.filter(app => app.dateTime >= now);
-                appointments.sort((a, b) => a.dateTime - b.dateTime);
-                
-                renderCurrentView(); 
-            }, (error) => {
-                console.error("Error al escuchar turnos:", error);
-                showMessage(`Error al cargar turnos: ${error.message}. Verifica las Reglas de Seguridad.`, true);
-            });
-        }
+        ];
 
         // --- UTILIDADES ---
+        const formatDateDisplay = (dateStr) => {
+            if (!dateStr) return '-';
+            // Asume dateStr en formato YYYY-MM-DD
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+        };
 
-        function generateId() {
-            // En Firestore, el ID es generado por addDoc, pero esta función se mantiene para el modo de edición de arrays
-            return Date.now().toString(36) + Math.random().toString(36).substring(2);
-        }
+        // --- COMPONENTES UI REUTILIZABLES ---
 
-        function showMessage(text, isError = false) {
-            const messageEl = document.getElementById('feedback-message');
-            messageEl.textContent = text;
-            messageEl.classList.remove('hidden', 'bg-red-100', 'bg-soft-green');
-            messageEl.classList.add(isError ? 'bg-red-100' : 'bg-soft-green');
-            messageEl.classList.remove('border-red-500', 'border-primary');
-            if(isError) messageEl.classList.add('border-red-500'); else messageEl.classList.add('border-primary');
-            
-            setTimeout(() => {
-                messageEl.classList.add('hidden');
-            }, 5000); 
-        }
+        const Toast = ({ message, type, onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 3000);
+                return () => clearTimeout(timer);
+            }, [onClose]);
 
-        /**
-         * Copia el texto al portapapeles.
-         */
-        function copyTextToClipboard(text) {
-            const tempTextArea = document.createElement('textarea');
-            tempTextArea.value = text;
-            tempTextArea.style.position = 'fixed'; 
-            tempTextArea.style.left = '-9999px'; 
-            document.body.appendChild(tempTextArea);
-            tempTextArea.focus();
-            tempTextArea.select();
+            const bgClass = type === 'success' ? 'bg-emerald-600' : 'bg-red-500';
 
-            try {
-                const successful = document.execCommand('copy');
-                return successful;
-            } catch (err) {
-                return false;
-            } finally {
-                document.body.removeChild(tempTextArea);
-            }
-        }
+            return (
+                <div className={`fixed top-4 right-4 z-50 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 fade-in ${bgClass}`}>
+                    {type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                    <span className="font-medium">{message}</span>
+                </div>
+            );
+        };
 
-        /** Formatea una fecha a 'DD/MM/YYYY' */
-        function formatDate(date) {
-            const day = date.getDate().toString().padStart(2, '0');
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        }
-        
-        /** Formatea una fecha a 'YYYY-MM-DD' para input type="date" */
-        function formatInputDate(date) {
-            return date.toISOString().split('T')[0];
-        }
+        const Card = ({ children, className = "", ...props }) => (
+            <div className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} {...props}>
+                {children}
+            </div>
+        );
 
-        /** Formatea una hora a 'HH:MM' */
-        function formatTime(date) {
-            return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
-        }
-        
-        /** Convierte una hora HH:MM a minutos totales desde la medianoche */
-        function getTimeInMinutes(timeStr) {
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            return hours * 60 + minutes;
-        }
-
-        /** Verifica si una fecha es un día de atención para el consultorio */
-        function isClinicDayActive(clinic, date) {
-            const dayIndex = date.getDay();
-            
-            if (dayIndex === 0 || dayIndex === 6) {
-                return false;
-            }
-            
-            const daySchedule = clinic.schedule?.[dayIndex];
-            return daySchedule?.active === true;
-        }
-
-        /** Obtiene el próximo día activo (incluyendo hoy) para el consultorio */
-        function getNextActiveDay(clinicId, startDate, direction = 1) {
-            const clinic = clinics.find(c => c.id === clinicId);
-            if (!clinic) return startDate;
-
-            const maxDaysCheck = 365;
-            let checkDate = new Date(startDate);
-            checkDate.setHours(0, 0, 0, 0);
-
-            if (direction !== 0 && !isClinicDayActive(clinic, checkDate)) {
-                 checkDate.setDate(checkDate.getDate() + direction);
-            }
-            
-            for (let i = 0; i < maxDaysCheck; i++) {
-                if (isClinicDayActive(clinic, checkDate)) {
-                    return checkDate;
-                }
-                checkDate.setDate(checkDate.getDate() + direction);
-            }
-            
-            return startDate; 
-        }
-
-        /** Calcula el próximo slot disponible para la fecha dada (HH:MM o 'No disponible') */
-        function calculateNextAvailableSlot(clinic, date) {
-            const dayIndex = date.getDay();
-            const daySchedule = clinic.schedule?.[dayIndex];
-            const duration = clinic.appointmentDuration;
-
-            if (!isClinicDayActive(clinic, date)) {
-                return null;
-            }
-
-            const startMinutes = getTimeInMinutes(daySchedule.start);
-            const endMinutes = getTimeInMinutes(daySchedule.end);
-            
-            const occupiedSlots = appointments
-                .filter(a => a.clinicId === clinic.id)
-                .filter(a => formatDate(a.dateTime) === formatDate(date))
-                .map(a => getTimeInMinutes(formatTime(a.dateTime)));
-
-            let searchStartMinutes = startMinutes;
-            const now = new Date();
-            
-            if (formatDate(date) === formatDate(now)) {
-                const nowMinutes = now.getHours() * 60 + now.getMinutes();
-                
-                let currentRoundedMinutes = Math.ceil((nowMinutes - startMinutes) / duration) * duration + startMinutes;
-                
-                if (currentRoundedMinutes < nowMinutes) {
-                    currentRoundedMinutes += duration;
-                }
-                
-                searchStartMinutes = Math.max(startMinutes, currentRoundedMinutes);
-            }
-
-            for (let currentSlotMinutes = searchStartMinutes; 
-                 currentSlotMinutes + duration <= endMinutes; 
-                 currentSlotMinutes += duration) {
-                
-                if (!occupiedSlots.includes(currentSlotMinutes)) {
-                    const hour = Math.floor(currentSlotMinutes / 60).toString().padStart(2, '0');
-                    const minute = (currentSlotMinutes % 60).toString().padStart(2, '0');
-                    return `${hour}:${minute}`;
-                }
-            }
-
-            return 'No disponible'; 
-        }
-
-        /** Obtiene un array de todos los slots disponibles para una fecha */
-        function getAvailableSlots(clinic, date) {
-            const dayIndex = date.getDay();
-            const daySchedule = clinic.schedule?.[dayIndex];
-            const duration = clinic.appointmentDuration;
-            const slots = [];
-
-            if (!isClinicDayActive(clinic, date)) {
-                return slots;
-            }
-
-            const startMinutes = getTimeInMinutes(daySchedule.start);
-            const endMinutes = getTimeInMinutes(daySchedule.end);
-            
-            const occupiedSlots = appointments
-                .filter(a => a.clinicId === clinic.id)
-                .filter(a => formatDate(a.dateTime) === formatDate(date))
-                .map(a => getTimeInMinutes(formatTime(a.dateTime)));
-
-            let searchStartMinutes = startMinutes;
-            const now = new Date();
-            
-            if (formatDate(date) === formatDate(now)) {
-                const nowMinutes = now.getHours() * 60 + now.getMinutes();
-                let currentRoundedMinutes = Math.ceil((nowMinutes - startMinutes) / duration) * duration + startMinutes;
-                if (currentRoundedMinutes < nowMinutes) {
-                    currentRoundedMinutes += duration;
-                }
-                searchStartMinutes = Math.max(startMinutes, currentRoundedMinutes);
-            }
-
-            for (let currentSlotMinutes = searchStartMinutes; 
-                 currentSlotMinutes + duration <= endMinutes; 
-                 currentSlotMinutes += duration) {
-                
-                if (!occupiedSlots.includes(currentSlotMinutes)) {
-                    const hour = Math.floor(currentSlotMinutes / 60).toString().padStart(2, '0');
-                    const minute = (currentSlotMinutes % 60).toString().padStart(2, '0');
-                    slots.push(`${hour}:${minute}`);
-                }
-            }
-
-            return slots; 
-        }
-        
-        // --- NAVEGACIÓN Y VISTAS ---
-
-        window.showView = function(viewName) {
-            document.querySelectorAll('.nav-item').forEach(el => {
-                el.classList.remove('bg-primary', 'text-white');
-                el.classList.add('bg-soft-green', 'text-dark-green');
-            });
-            
-            const navEl = document.querySelector(`.nav-item[onclick*="${viewName}"]`);
-            if (navEl) {
-                navEl.classList.remove('bg-soft-green', 'text-dark-green');
-                navEl.classList.add('bg-primary', 'text-white');
-            }
-
-            // Lógica de vista (re)inicial
-            if (viewName === 'schedule' && currentClinicId) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                currentViewDate = getNextActiveDay(currentClinicId, today, 1);
-            } else if (viewName === 'public-booking' && clinics.length > 0) {
-                 // Inicializa la vista pública con el primer consultorio
-                 const clinicId = clinics[0].id;
-                 const today = new Date();
-                 const nextActiveDay = getNextActiveDay(clinicId, today, 1); 
-                 renderPublicBookingView(clinicId, nextActiveDay);
-                 return; // Evita el renderCurrentView final
-            }
-
-            renderCurrentView(viewName);
-        }
-
-        function renderCurrentView(viewNameOverride = null) {
-            const clinicSelectorContainer = document.getElementById('clinic-selector-container');
-            
-            let viewName = viewNameOverride || (document.querySelector('.nav-item.bg-primary') ? document.querySelector('.nav-item.bg-primary').getAttribute('onclick').match(/showView\('(.*?)'\)/)[1] : 'manage-clinics');
-
-            const isManagementView = viewName !== 'manage-clinics' && viewName !== 'public-booking';
-            clinicSelectorContainer.classList.toggle('hidden', viewName === 'manage-clinics' || viewName === 'public-booking');
-            
-            if (viewName !== 'manage-clinics' && clinics.length === 0) {
-                contentAreaEl.innerHTML = `<div class="p-8 text-center text-xl">Aún no tienes consultorios definidos. Por favor, ve a "Gestión de Consultorios" para empezar.</div>`;
-                return;
-            }
-
-            switch (viewName) {
-                case 'schedule':
-                    renderScheduleView();
-                    break;
-                case 'appointments':
-                    renderAppointmentsView();
-                    break;
-                case 'manage-clinics':
-                    renderManageClinicsView();
-                    break;
-                case 'public-booking':
-                    // Debe ser llamado con el ID y fecha, si no, usa un default
-                    if (clinics.length > 0) {
-                        const today = new Date();
-                        const nextActiveDay = getNextActiveDay(clinics[0].id, today, 1);
-                        renderPublicBookingView(clinics[0].id, nextActiveDay);
-                    }
-                    break;
-            }
-        }
-        
-        // --- RENDERIZADO DEL SELECTOR DE CONSULTORIOS ---
-
-        function renderClinicSelector() {
-            const clinicSelectEl = document.getElementById('clinic-select');
-            // ... (Lógica de renderClinicSelector idéntica a v17, usando currentClinicId)
-            clinicSelectEl.innerHTML = '';
-            
-            if (clinics.length === 0) {
-                clinicSelectEl.innerHTML = '<option value="">Sin Consultorios</option>';
-                clinicSelectEl.disabled = true;
-                currentClinicId = null;
-                return;
-            }
-            
-            clinicSelectEl.disabled = false;
-            
-            if (!currentClinicId || !clinics.some(c => c.id === currentClinicId)) {
-                currentClinicId = clinics.length > 0 ? clinics[0].id : null;
-            }
-
-            clinics.forEach(clinic => {
-                const option = document.createElement('option');
-                option.value = clinic.id;
-                option.textContent = clinic.name;
-                clinicSelectEl.appendChild(option);
-            });
-
-            clinicSelectEl.value = currentClinicId;
-
-            clinicSelectEl.onchange = (e) => {
-                currentClinicId = e.target.value;
-                if (document.querySelector('.nav-item.bg-primary')?.textContent.includes('Agenda')) {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    currentViewDate = getNextActiveDay(currentClinicId, today, 1); 
-                }
-                renderCurrentView();
+        const Button = ({ children, onClick, variant = 'primary', disabled = false, fullWidth = false, icon: Icon, type = "button" }) => {
+            const baseClass = "px-4 py-3 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-medical-600 hover:bg-medical-700 text-white shadow-md shadow-medical-200",
+                secondary: "bg-white border-2 border-medical-100 text-medical-700 hover:border-medical-500 hover:bg-medical-50",
+                ghost: "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             };
-        }
-        
-        // --- VISTA: GESTIÓN DE CONSULTORIOS (Actualizada para usar Firestore) ---
 
-        function renderClinicsList() {
-            const clinicsListEl = document.getElementById('clinics-list');
-            // ... (Lógica de renderClinicsList idéntica a v17)
-            if (!clinicsListEl) return;
+            return (
+                <button 
+                    type={type}
+                    onClick={onClick} 
+                    disabled={disabled}
+                    className={`${baseClass} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    {disabled ? <Loader2 className="animate-spin" size={20} /> : (Icon && <Icon size={20} />)}
+                    {children}
+                </button>
+            );
+        };
 
-            let listHtml = `
-                <h3 class="text-xl font-semibold mb-4">Consultorios Definidos (${clinics.length})</h3>
-                ${clinics.length === 0 ? '<p class="text-gray-500">No hay consultorios definidos aún.</p>' : ''}
-                ${clinics.map(clinic => `
-                    <div class="card bg-white p-4 rounded-xl flex justify-between items-start">
-                        <div>
-                            <h4 class="font-bold text-lg">${clinic.name}</h4>
-                            <p class="text-sm text-gray-700 font-medium mb-2">Duración Consulta: ${clinic.appointmentDuration} min</p>
-                            <ul class="text-sm text-gray-600 mt-1 space-y-1">
-                                ${WORK_DAY_NAMES.map((dayName, index) => {
-                                    const scheduleIndex = index + 1;
-                                    const schedule = clinic.schedule?.[scheduleIndex]; 
-                                    if (schedule && schedule.active) {
-                                        return `<li>${dayName}: ${schedule.start} - ${schedule.end}</li>`;
-                                    }
-                                    return '';
-                                }).join('') || '<li class="text-red-500">Sin horario definido.</li>'}
-                            </ul>
-                        </div>
-                        <div class="flex space-x-2">
-                            <button onclick="editClinic('${clinic.id}')" class="text-blue-500 hover:text-blue-700 font-medium">Editar</button>
-                            <button onclick="deleteClinic('${clinic.id}', '${clinic.name}')" class="text-red-500 hover:text-red-700 font-medium">Eliminar</button>
-                        </div>
-                    </div>
-                `).join('')}
-            `;
-            clinicsListEl.innerHTML = listHtml;
-        }
+        // --- LOGICA PRINCIPAL (HOOKS Y APP) ---
 
-        function renderManageClinicsView() {
-            // ... (Contenedor HTML idéntico a v17)
-             contentAreaEl.innerHTML = `
-                <div class="p-4 md:p-8">
-                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Gestión de Consultorios</h2>
-                    
-                    <!-- Formulario para Agregar/Editar Consultorio -->
-                    <div id="clinic-form-container" class="card p-6 bg-white rounded-xl mb-8">
-                        <h3 class="text-xl font-semibold mb-4">Añadir Nuevo Consultorio</h3>
-                        <form id="clinic-form">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="mb-4">
-                                    <label for="clinic-name" class="block text-sm font-medium text-gray-700">Nombre del Consultorio</label>
-                                    <input type="text" id="clinic-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                                </div>
-                                <div class="mb-4">
-                                    <label for="appointment-duration" class="block text-sm font-medium text-gray-700">Duración de la Consulta (minutos)</label>
-                                    <input type="number" id="appointment-duration" required min="5" step="5" value="30" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                                </div>
+        const App = () => {
+            // Estado Global
+            const [view, setView] = useState('landing'); // landing, patient, professional, admin
+            const [appointments, setAppointments] = useState([]);
+            // Estado para Consultorios (Ahora dinámico)
+            const [consultorios, setConsultorios] = useState(DEFAULT_CONSULTORIOS);
+            const [pendingSyncs, setPendingSyncs] = useState([]);
+            const [toast, setToast] = useState(null);
+            const [isOnline, setIsOnline] = useState(true); // Simulación de estado de red
+            const [firebaseReady, setFirebaseReady] = useState(false);
+
+            // Inicialización
+            useEffect(() => {
+                // 1. Cargar LocalStorage
+                const localData = localStorage.getItem('appointments');
+                const localQueue = localStorage.getItem('pendingSyncs');
+                const localConsultorios = localStorage.getItem('consultorios'); // Cargar consultorios
+                
+                if (localData) setAppointments(JSON.parse(localData));
+                if (localQueue) setPendingSyncs(JSON.parse(localQueue));
+                // Si existen consultorios guardados, usarlos; si no, usar default
+                if (localConsultorios) setConsultorios(JSON.parse(localConsultorios));
+
+                // 2. Verificar Config Firebase
+                if (manualConfig.apiKey !== "TU_API_KEY_AQUI") {
+                    console.log("Firebase configurado (Simulado)");
+                    setFirebaseReady(true);
+                } else {
+                    console.log("Modo Local: Firebase no configurado");
+                }
+
+                // Listener de conexión
+                window.addEventListener('online', () => setIsOnline(true));
+                window.addEventListener('offline', () => setIsOnline(false));
+
+                return () => {
+                    window.removeEventListener('online', () => setIsOnline(true));
+                    window.removeEventListener('offline', () => setIsOnline(false));
+                };
+            }, []);
+
+            // Mostrar Toast
+            const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
+
+            // Guardar Consultorios
+            const saveConsultorios = (newConsultorios) => {
+                setConsultorios(newConsultorios);
+                localStorage.setItem('consultorios', JSON.stringify(newConsultorios));
+                showToast("Configuración de consultorios guardada");
+            };
+
+            // Persistencia Híbrida
+            const saveAppointment = (newAppointment) => {
+                try {
+                    // 1. Guardar en Estado
+                    const updatedAppointments = [...appointments, newAppointment];
+                    setAppointments(updatedAppointments);
+
+                    // 2. Guardar en LocalStorage (Offline Priority)
+                    localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
+
+                    // 3. Cola de Sincronización
+                    const syncItem = { action: 'ADD', data: newAppointment, timestamp: Date.now() };
+                    const updatedQueue = [...pendingSyncs, syncItem];
+                    setPendingSyncs(updatedQueue);
+                    localStorage.setItem('pendingSyncs', JSON.stringify(updatedQueue));
+
+                    // 4. Intentar Sync (Si hay Firebase)
+                    if (firebaseReady && isOnline) {
+                        // syncWithFirebase(updatedQueue); -> Lógica futura
+                        console.log("Intentando sincronizar con Firebase...");
+                        setTimeout(() => {
+                            setPendingSyncs([]);
+                            localStorage.setItem('pendingSyncs', JSON.stringify([]));
+                        }, 2000);
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error("Error al guardar:", error);
+                    return false;
+                }
+            };
+
+            // --- VISTAS ---
+
+            if (view === 'landing') {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-medical-50 to-white relative">
+                        {/* Botón Admin Flotante */}
+                        <button 
+                            onClick={() => setView('admin')}
+                            className="absolute top-6 right-6 p-2 text-gray-400 hover:text-medical-600 transition-colors"
+                            title="Configuración de Consultorios"
+                        >
+                            <Settings size={24} />
+                        </button>
+
+                        <div className="text-center mb-10 max-w-lg">
+                            <div className="bg-medical-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Stethoscope className="text-medical-600" size={40} />
                             </div>
-
-                            <h4 class="font-medium mt-6 mb-3">Horario de Atención (Lunes a Viernes):</h4>
-                            <div id="schedule-inputs" class="space-y-3">
-                                <!-- Se llenará con JavaScript en setupClinicForm -->
-                            </div>
+                            <h1 className="text-4xl font-bold text-gray-900 mb-4">Consultorios dra. Abraldes</h1>
+                            <p className="text-gray-600 text-lg">Bienvenido al sistema de gestión de turnos integrado.</p>
                             
-                            <button type="submit" class="action-button mt-6 px-4 py-2 rounded-lg" id="submit-clinic-btn">
-                                Guardar Consultorio
-                            </button>
-                        </form>
+                            {!firebaseReady && (
+                                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium">
+                                    <WifiOff size={14} /> Modo Local (Offline-First)
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl">
+                            <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-md group" >
+                                <div className="flex flex-col h-full justify-between" onClick={() => setView('patient')}>
+                                    <div>
+                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+                                            <User size={24} />
+                                        </div>
+                                        <h2 className="text-xl font-bold text-gray-900 mb-2">Soy Paciente</h2>
+                                        <p className="text-gray-500">Solicitar un nuevo turno médico, ver consultorios y horarios disponibles.</p>
+                                    </div>
+                                    <Button className="mt-6 w-full" onClick={() => setView('patient')}>
+                                        Solicitar Turno <ChevronRight size={18} />
+                                    </Button>
+                                </div>
+                            </Card>
+
+                            <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-md group">
+                                <div className="flex flex-col h-full justify-between" onClick={() => setView('professional')}>
+                                    <div>
+                                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
+                                            <Calendar size={24} />
+                                        </div>
+                                        <h2 className="text-xl font-bold text-gray-900 mb-2">Soy Profesional</h2>
+                                        <p className="text-gray-500">Acceder a la agenda diaria, semanal y mensual. Gestionar pacientes.</p>
+                                    </div>
+                                    <Button variant="secondary" className="mt-6 w-full" onClick={() => setView('professional')}>
+                                        Ver Agenda <ChevronRight size={18} />
+                                    </Button>
+                                </div>
+                            </Card>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-medical-50">
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                    
+                    <header className="bg-white shadow-sm sticky top-0 z-40">
+                        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('landing')}>
+                                <div className="bg-medical-600 text-white p-1.5 rounded-md">
+                                    <Stethoscope size={20} />
+                                </div>
+                                <span className="font-bold text-gray-800 hidden sm:block">Consultorios dra. Abraldes</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                                    {pendingSyncs.length > 0 ? (
+                                        <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando ({pendingSyncs.length})</>
+                                    ) : (
+                                        <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>
+                                    )}
+                                </div>
+                                <Button variant="ghost" onClick={() => setView('landing')}>
+                                    <LogOut size={18} /> <span className="hidden sm:inline">Salir</span>
+                                </Button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-4 py-8">
+                        {view === 'patient' && (
+                            <PatientView 
+                                consultorios={consultorios} 
+                                appointments={appointments}
+                                onSave={(apt) => {
+                                    if(saveAppointment(apt)) {
+                                        showToast("Turno confirmado exitosamente");
+                                        setView('landing');
+                                    } else {
+                                        showToast("Error al guardar", "error");
+                                    }
+                                }}
+                                onCancel={() => setView('landing')}
+                            />
+                        )}
+                        {view === 'professional' && (
+                            <ProfessionalView 
+                                consultorios={consultorios} 
+                                appointments={appointments}
+                            />
+                        )}
+                        {view === 'admin' && (
+                            <AdminView 
+                                consultorios={consultorios} 
+                                onSave={saveConsultorios}
+                            />
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        // --- VISTA ADMIN ---
+        const AdminView = ({ consultorios, onSave }) => {
+            const [editingList, setEditingList] = useState(JSON.parse(JSON.stringify(consultorios)));
+            const [expandedId, setExpandedId] = useState(null);
+
+            const handleChange = (id, field, value) => {
+                setEditingList(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+            };
+
+            const toggleDay = (consultoryId, dayIndex) => {
+                setEditingList(prev => prev.map(c => {
+                    if (c.id !== consultoryId) return c;
+                    const newDays = c.days.includes(dayIndex) 
+                        ? c.days.filter(d => d !== dayIndex)
+                        : [...c.days, dayIndex].sort();
+                    return { ...c, days: newDays };
+                }));
+            };
+
+            const addNew = () => {
+                const newId = Math.max(...editingList.map(c => c.id), 0) + 1;
+                const newConsultory = {
+                    id: newId,
+                    name: "Nuevo Consultorio",
+                    address: "",
+                    days: [1, 2, 3, 4, 5],
+                    startHour: 9,
+                    endHour: 17,
+                    duration: 30,
+                    insurances: []
+                };
+                setEditingList([...editingList, newConsultory]);
+                setExpandedId(newId);
+            };
+
+            const remove = (id) => {
+                if (confirm("¿Estás seguro de eliminar este consultorio?")) {
+                    setEditingList(editingList.filter(c => c.id !== id));
+                }
+            };
+
+            const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+            return (
+                <div className="max-w-4xl mx-auto fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <Settings className="text-medical-600"/> Configuración de Consultorios
+                        </h2>
+                        <Button onClick={() => onSave(editingList)} icon={Save}>Guardar Cambios</Button>
                     </div>
 
-                    <!-- Lista de Consultorios Existentes (Contenedor) -->
-                    <div class="space-y-4" id="clinics-list">
-                        <!-- Se llenará con renderClinicsList -->
+                    <div className="space-y-4">
+                        {editingList.map(cons => (
+                            <Card key={cons.id} className={`transition-all ${expandedId === cons.id ? 'ring-2 ring-medical-500' : ''}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)}>
+                                        <h3 className="font-bold text-lg text-gray-800">{cons.name}</h3>
+                                        <p className="text-sm text-gray-500">{cons.address || "Sin dirección"}</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)} className="p-2 text-medical-600 hover:bg-medical-50 rounded">
+                                            {expandedId === cons.id ? 'Cerrar' : 'Editar'}
+                                        </button>
+                                        <button onClick={() => remove(cons.id)} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {expandedId === cons.id && (
+                                    <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-100 animate-fadeIn">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                value={cons.name} onChange={e => handleChange(cons.id, 'name', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                value={cons.address} onChange={e => handleChange(cons.id, 'address', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Obras Sociales (Separa por comas)</label>
+                                            <input type="text" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                value={cons.insurances.join(', ')} 
+                                                onChange={e => handleChange(cons.id, 'insurances', e.target.value.split(',').map(s => s.trim()))} />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Inicio (Hora)</label>
+                                                <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.startHour} onChange={e => handleChange(cons.id, 'startHour', parseInt(e.target.value))} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Fin (Hora)</label>
+                                                <input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.endHour} onChange={e => handleChange(cons.id, 'endHour', parseInt(e.target.value))} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Duración (min)</label>
+                                                <input type="number" step="5" className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={cons.duration} onChange={e => handleChange(cons.id, 'duration', parseInt(e.target.value))} />
+                                            </div>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Días de Atención</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {DAYS.map((day, idx) => (
+                                                    <button 
+                                                        key={idx}
+                                                        onClick={() => toggleDay(cons.id, idx)}
+                                                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                                                            cons.days.includes(idx) 
+                                                            ? 'bg-medical-600 text-white border-medical-600' 
+                                                            : 'bg-white text-gray-500 border-gray-300 hover:border-medical-300'
+                                                        }`}
+                                                    >
+                                                        {day}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        ))}
+
+                        <button onClick={addNew} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-medical-500 hover:text-medical-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-2 font-medium">
+                            <Plus size={20} /> Agregar Nuevo Consultorio
+                        </button>
                     </div>
                 </div>
-            `;
-            
-            setupClinicForm();
-            renderClinicsList();
-        }
+            );
+        };
 
-        function setupClinicForm(clinicToEdit = null) {
-            // ... (Llenado de formulario idéntico a v17)
-            const form = document.getElementById('clinic-form');
-            const nameInput = document.getElementById('clinic-name');
-            const durationInput = document.getElementById('appointment-duration');
-            const scheduleInputsContainer = document.getElementById('schedule-inputs');
-            const submitBtn = document.getElementById('submit-clinic-btn');
-            
-            if (!form || !nameInput || !scheduleInputsContainer || !submitBtn || !durationInput) return; 
+        // --- VISTA PACIENTE ---
 
-            // Llenar inputs de horarios (solo Lunes a Viernes)
-            scheduleInputsContainer.innerHTML = WORK_DAY_NAMES.map((dayName, index) => {
-                const dayIndex = index + 1; // 1=Lunes, 5=Viernes
-                const scheduleData = clinicToEdit && clinicToEdit.schedule?.[dayIndex];
+        const PatientView = ({ consultorios, appointments, onSave, onCancel }) => {
+            const [step, setStep] = useState(1);
+            const [selectedRoom, setSelectedRoom] = useState(null);
+            const [formData, setFormData] = useState({
+                name: '', age: '', phone: '', insurance: ''
+            });
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+            const [selectedSlot, setSelectedSlot] = useState(null);
+            const [isSubmitting, setIsSubmitting] = useState(false);
 
-                return `
-                    <div class="flex items-center space-x-3 bg-gray-50 p-3 rounded-md">
-                        <input type="checkbox" id="day-${dayIndex}-active" name="day-${dayIndex}-active" 
-                            class="h-4 w-4 text-primary rounded border-gray-300"
-                            ${scheduleData?.active ? 'checked' : ''}
-                        >
-                        <label for="day-${dayIndex}-active" class="flex-grow font-medium text-dark-green w-20">${dayName}</label>
-                        <input type="time" id="day-${dayIndex}-start" name="day-${dayIndex}-start" value="${scheduleData?.start || '09:00'}" required class="p-1 border rounded w-full">
-                        <span class="text-gray-500">-</span>
-                        <input type="time" id="day-${dayIndex}-end" name="day-${dayIndex}-end" value="${scheduleData?.end || '17:00'}" required class="p-1 border rounded w-full">
-                    </div>
-                `;
-            }).join('');
+            // Generar Slots Disponibles (Algoritmo de Agrupamiento)
+            const availableSlots = useMemo(() => {
+                if (!selectedRoom || !selectedDate) return [];
 
-            // Llenar campos si estamos en modo edición
-            if (clinicToEdit) {
-                nameInput.value = clinicToEdit.name;
-                durationInput.value = clinicToEdit.appointmentDuration || 30;
-                document.getElementById('clinic-form-container').querySelector('h3').textContent = 'Editar Consultorio: ' + clinicToEdit.name;
-                submitBtn.textContent = 'Actualizar Consultorio';
-            } else {
-                nameInput.value = ''; 
-                durationInput.value = 30; 
-                document.getElementById('clinic-form-container').querySelector('h3').textContent = 'Añadir Nuevo Consultorio';
-                submitBtn.textContent = 'Guardar Consultorio';
-            }
+                const room = consultorios.find(r => r.id === selectedRoom);
+                
+                const [y, m, d] = selectedDate.split('-').map(Number);
+                const dateObj = new Date(y, m - 1, d, 12, 0, 0); 
+                const dayOfWeek = dateObj.getDay(); 
 
-            // Manejo del envío del formulario (ACTUALIZADO PARA FIRESTORE)
-            form.onsubmit = async (e) => {
-                e.preventDefault();
+                if (!room.days.includes(dayOfWeek)) return []; 
 
-                try {
-                    const name = nameInput.value.trim();
-                    const appointmentDuration = parseInt(durationInput.value, 10);
+                const slots = [];
+                const existingApts = appointments.filter(a => 
+                    a.consultoryId === selectedRoom && a.date === selectedDate
+                );
 
-                    if (!name) return showMessage("El nombre del consultorio es obligatorio.", true);
-                    if (isNaN(appointmentDuration) || appointmentDuration <= 0) return showMessage("La duración de la consulta debe ser un número positivo (mínimo 5 minutos).", true);
+                let currentTime = room.startHour * 60; // Convertir a minutos
+                const endTime = room.endHour * 60;
 
-                    const newSchedule = Array(7).fill({ active: false, start: '00:00', end: '00:00' }); 
-                    for (let i = 1; i <= 5; i++) {
-                        const active = document.getElementById(`day-${i}-active`).checked;
-                        const start = document.getElementById(`day-${i}-start`).value;
-                        const end = document.getElementById(`day-${i}-end`).value;
-                        newSchedule[i] = { active, start, end };
-                    }
+                while (currentTime + room.duration <= endTime) {
+                    const startMin = currentTime;
+                    const endMin = currentTime + room.duration;
                     
-                    const clinicData = {
-                        name: name,
-                        appointmentDuration: appointmentDuration,
-                        schedule: newSchedule,
+                    // Formato HH:MM
+                    const formatTime = (min) => {
+                        const h = Math.floor(min / 60).toString().padStart(2, '0');
+                        const m = (min % 60).toString().padStart(2, '0');
+                        return `${h}:${m}`;
                     };
 
-                    if (clinicToEdit) {
-                        // ACTUALIZACIÓN EN FIRESTORE
-                        await updateDoc(doc(getClinicsRef(), clinicToEdit.id), clinicData);
-                        showMessage(`Consultorio "${name}" actualizado con éxito.`);
-                    } else {
-                        // CREACIÓN EN FIRESTORE
-                        const docRef = await addDoc(getClinicsRef(), {
-                            ...clinicData,
-                            createdAt: new Date(),
-                            createdBy: userId,
+                    const slotLabel = `${formatTime(startMin)} - ${formatTime(endMin)}`;
+                    
+                    // Verificar colisión
+                    const isOccupied = existingApts.some(apt => apt.slot === slotLabel);
+
+                    if (!isOccupied) {
+                        const isAdjacent = existingApts.some(apt => {
+                            const [aptStart, aptEnd] = apt.slot.split(' - ');
+                            return aptEnd === formatTime(startMin) || aptStart === formatTime(endMin);
                         });
-                        currentClinicId = docRef.id;
-                        showMessage(`Consultorio "${name}" añadido con éxito.`);
-                        form.reset();
+
+                        slots.push({
+                            label: slotLabel,
+                            start: startMin,
+                            priority: isAdjacent ? 1 : 0 
+                        });
                     }
-                    
-                    setupClinicForm(null); // Vuelve al modo "Añadir"
-                    
-                } catch (error) {
-                    console.error("Error al procesar el formulario del consultorio:", error);
-                    showMessage("Error al guardar el consultorio. Revisa la consola.", true);
+
+                    currentTime += room.duration;
                 }
-            };
-        }
 
-        window.editClinic = function(clinicId) {
-            const clinic = clinics.find(c => c.id === clinicId);
-            if (clinic) {
-                document.getElementById('clinic-form-container').scrollIntoView({ behavior: 'smooth' });
-                setupClinicForm(clinic);
-            }
-        }
-
-        window.deleteClinic = async function(clinicId, clinicName) {
-            if (!window.confirm(`¿Estás seguro de que quieres eliminar el consultorio "${clinicName}"?`)) {
-                return;
-            }
-
-            try {
-                await deleteDoc(doc(getClinicsRef(), clinicId));
-                showMessage(`Consultorio "${clinicName}" eliminado.`);
-            } catch (error) {
-                console.error("Error al eliminar consultorio:", error);
-                showMessage("Error al eliminar el consultorio. Revisa la consola.", true);
-            }
-        }
-
-        // --- LÓGICA DE EDICIÓN Y COMPARTIR TURNOS (Idéntica a v17, usando Firestore) ---
-
-        window.editAppointment = function(appointmentId) {
-            // ... (Idéntica a v17)
-            const appointment = appointments.find(a => a.id === appointmentId);
-            if (!appointment) return showMessage("Turno no encontrado.", true);
-
-            showView('appointments');
-            
-            setTimeout(() => {
-                const formTitle = document.getElementById('form-title');
-                const submitBtn = document.getElementById('submit-appointment-btn');
-                const appointmentDateInput = document.getElementById('appointment-date');
-
-                document.getElementById('appointment-id-hidden').value = appointment.id;
-                document.getElementById('patient-name').value = appointment.patientName;
-                document.getElementById('patient-phone').value = appointment.patientPhone;
-                appointmentDateInput.value = formatInputDate(appointment.dateTime);
-                document.getElementById('appointment-time').value = formatTime(appointment.dateTime);
-                document.getElementById('notes').value = appointment.notes;
-
-                if (formTitle) formTitle.textContent = 'Editar Turno Existente';
-                if (submitBtn) submitBtn.textContent = 'Actualizar Turno';
-                
-                if (appointmentDateInput) appointmentDateInput.dispatchEvent(new Event('change'));
-
-                document.getElementById('new-appointment-form-container').scrollIntoView({ behavior: 'smooth' });
-
-            }, 50); 
-        }
-
-        function resetAppointmentForm() {
-            // ... (Idéntica a v17)
-            const form = document.getElementById('appointment-form');
-            const formTitle = document.getElementById('form-title');
-            const submitBtn = document.getElementById('submit-appointment-btn');
-            const appointmentDateInput = document.getElementById('appointment-date');
-            
-            if (form) form.reset();
-            
-            document.getElementById('appointment-id-hidden').value = '';
-            
-            if (formTitle) formTitle.textContent = 'Añadir Nuevo Turno';
-            if (submitBtn) submitBtn.textContent = 'Confirmar Turno';
-            
-            if (currentClinicId) {
-                const clinic = clinics.find(c => c.id === currentClinicId);
-                const today = new Date();
-                const nextActiveDay = getNextActiveDay(currentClinicId, today, 1);
-                
-                appointmentDateInput.value = formatInputDate(nextActiveDay);
-                appointmentDateInput.dispatchEvent(new Event('change'));
-            }
-        }
-
-        window.shareAppointment = function(appointmentId) {
-            // ... (Idéntica a v17)
-            const appt = appointments.find(a => a.id === appointmentId);
-            const clinic = clinics.find(c => c.id === appt.clinicId);
-            if (!appt || !clinic) return showMessage("Turno no encontrado.", true);
-
-            const text = `
-                Turno Confirmado
-                Consultorio: ${clinic.name}
-                Paciente: ${appt.patientName}
-                Teléfono: ${appt.patientPhone}
-                Fecha: ${formatDate(appt.dateTime)}
-                Hora: ${formatTime(appt.dateTime)}
-                ${appt.notes ? `Notas: ${appt.notes}` : ''}
-            `.trim();
-
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Turno Confirmado',
-                    text: text,
-                }).catch(error => {
-                    handleShareFallback(text);
+                return slots.sort((a, b) => {
+                    if (b.priority !== a.priority) return b.priority - a.priority;
+                    return a.start - b.start;
                 });
-            } else {
-                handleShareFallback(text);
-            }
-        }
-        
-        function handleShareFallback(text) {
-             const copiedSuccessfully = copyTextToClipboard(text);
-             if (copiedSuccessfully) {
-                 showMessage('✅ Detalles del turno COPIADOS al portapapeles. ¡Ya puedes pegarlos donde quieras!', false);
-             } else {
-                 showMessage('⚠️ Error al intentar copiar. Por favor, intente seleccionar y copiar el texto manualmente.', true);
-             }
-        }
 
-        // --- VISTA: AGENDAR NUEVO TURNO (Uso Médico) ---
+            }, [selectedRoom, selectedDate, consultorios, appointments]);
 
-        function renderAppointmentsView() {
-            // ... (Contenido HTML idéntico a v17, se reutiliza el mismo formulario)
-            const selectedClinic = clinics.find(c => c.id === currentClinicId);
-            if (!selectedClinic) {
-                contentAreaEl.innerHTML = `<p class="p-8 text-center">Seleccione un consultorio para agendar un turno.</p>`;
-                return;
-            }
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!selectedSlot || !selectedRoom || isSubmitting) return;
 
-            const today = new Date();
-            const nextActiveDay = getNextActiveDay(currentClinicId, today, 1); 
-            const defaultDate = formatInputDate(nextActiveDay);
-
-            const dayInfoHtml = getDayScheduleInfoHtml(selectedClinic, nextActiveDay);
-            
-            contentAreaEl.innerHTML = `
-                <div class="p-4 md:p-8">
-                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Gestión de Turnos (Uso Médico)</h2>
-                    
-                    <div id="new-appointment-form-container" class="card p-6 bg-white rounded-xl mb-8">
-                        <h3 class="text-xl font-semibold mb-4" id="form-title">Añadir Nuevo Turno</h3>
-                        
-                        <div id="schedule-info-display" class="mb-4 p-3 rounded-lg schedule-info-box">
-                            ${dayInfoHtml}
-                        </div>
-                        
-                        <form id="appointment-form">
-                            <!-- Campo oculto para manejar el ID en modo edición -->
-                            <input type="hidden" id="appointment-id-hidden" value=""> 
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="patient-name" class="block text-sm font-medium text-gray-700">Nombre del Paciente</label>
-                                    <input type="text" id="patient-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                                </div>
-                                <div>
-                                    <label for="patient-phone" class="block text-sm font-medium text-gray-700">Teléfono del Paciente</label>
-                                    <input type="tel" id="patient-phone" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                                </div>
-                                <div>
-                                    <label for="appointment-date" class="block text-sm font-medium text-gray-700">Fecha</label>
-                                    <input type="date" id="appointment-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" value="${defaultDate}">
-                                </div>
-                                <div>
-                                    <label for="appointment-time" class="block text-sm font-medium text-gray-700">Hora</label>
-                                    <input type="time" id="appointment-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label for="notes" class="block text-sm font-medium text-gray-700">Notas</label>
-                                    <textarea id="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"></textarea>
-                                </div>
-                            </div>
-                            
-                            <div class="flex justify-between items-center mt-6">
-                                <button type="submit" id="submit-appointment-btn" class="action-button px-4 py-2 rounded-lg">
-                                    Confirmar Turno
-                                </button>
-                                <button type="button" onclick="resetAppointmentForm()" class="text-sm text-red-500 hover:text-red-700 font-medium">Cancelar Edición / Nuevo Turno</button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <h3 class="text-xl font-semibold mb-4 text-dark-green">Próximos Turnos Agendados para ${selectedClinic.name}</h3>
-                    <div id="current-appointments-list" class="space-y-3">
-                        ${renderAppointmentsList(currentClinicId)}
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('appointment-form').onsubmit = handleAppointmentSubmit;
-            
-            document.getElementById('appointment-date').addEventListener('change', (e) => {
-                const newDateStr = e.target.value;
-                const [year, month, day] = newDateStr.split('-').map(Number);
-                const newDate = new Date(year, month - 1, day);
-                newDate.setHours(0, 0, 0, 0);
-
-                const clinic = clinics.find(c => c.id === currentClinicId);
-                const nextActiveDay = getNextActiveDay(currentClinicId, today, 1);
-
-                if (!isClinicDayActive(clinic, newDate)) {
-                    e.target.value = defaultDate;
-                    
-                    showMessage(`Error: El consultorio está CERRADO el ${DAY_NAMES_FULL[newDate.getDay()]}, ${formatDate(newDate)}. Seleccione un día activo.`, true);
-
-                    const updatedInfo = getDayScheduleInfoHtml(clinic, nextActiveDay);
-                    document.getElementById('schedule-info-display').innerHTML = updatedInfo;
-                    return;
-                }
-
-                const updatedInfo = getDayScheduleInfoHtml(clinic, newDate);
-                document.getElementById('schedule-info-display').innerHTML = updatedInfo;
-            });
-        }
-
-        /** Maneja el envío del formulario de turno (ACTUALIZADO PARA FIRESTORE) */
-        async function handleAppointmentSubmit(e) {
-            e.preventDefault();
-            
-            const appointmentId = document.getElementById('appointment-id-hidden').value; 
-            const isEditing = !!appointmentId;
-
-            const patientName = document.getElementById('patient-name').value.trim();
-            const patientPhone = document.getElementById('patient-phone').value.trim();
-            const dateStr = document.getElementById('appointment-date').value;
-            const timeStr = document.getElementById('appointment-time').value;
-            const notes = document.getElementById('notes').value.trim();
-
-            if (!patientName || !patientPhone || !dateStr || !timeStr || !currentClinicId) {
-                return showMessage("Todos los campos (incluyendo el Teléfono) son obligatorios.", true);
-            }
-
-            const [year, month, day] = dateStr.split('-').map(Number);
-            const [hour, minute] = timeStr.split(':').map(Number);
-            const localDateTime = new Date(year, month - 1, day, hour, minute);
-
-            if (isNaN(localDateTime.getTime())) {
-                return showMessage("Fecha u hora inválida.", true);
-            }
-            
-            const selectedClinic = clinics.find(c => c.id === currentClinicId);
-            const durationMinutes = selectedClinic.appointmentDuration;
-            const dayIndex = localDateTime.getDay();
-            const isWorkingDay = isClinicDayActive(selectedClinic, localDateTime);
-            
-            if (!isWorkingDay) {
-                 const dayName = DAY_NAMES_FULL[dayIndex];
-                 return showMessage(`Error: El consultorio "${selectedClinic.name}" está CERRADO el ${dayName}, ${formatDate(localDateTime)}.`, true);
-            }
-            
-            const daySchedule = selectedClinic.schedule[dayIndex];
-            const reqMinutes = getTimeInMinutes(timeStr);
-            const startMinutes = getTimeInMinutes(daySchedule.start);
-            const endMinutes = getTimeInMinutes(daySchedule.end);
-
-            const appointmentEndTimeMinutes = reqMinutes + durationMinutes;
-            if (reqMinutes < startMinutes || appointmentEndTimeMinutes > endMinutes) {
-                return showMessage(`Error de horario: El turno de ${timeStr} está FUERA del horario de atención del consultorio: ${daySchedule.start} a ${daySchedule.end} (la consulta dura ${durationMinutes} min).`, true);
-            }
-            
-            const timeSinceStart = reqMinutes - startMinutes;
-            if (timeSinceStart % durationMinutes !== 0) {
-                 return showMessage(`Error de intervalo: El turno debe ser en una fracción de ${durationMinutes} minutos a partir de ${daySchedule.start}.`, true);
-            }
-
-            const appointmentsForDay = appointments
-                .filter(a => a.clinicId === currentClinicId)
-                .filter(a => formatDate(a.dateTime) === formatDate(localDateTime))
-                .filter(a => a.id !== appointmentId); 
+                setIsSubmitting(true);
                 
-            const isSlotOccupied = appointmentsForDay.some(a => getTimeInMinutes(formatTime(a.dateTime)) === reqMinutes);
-            
-            if (isSlotOccupied) {
-                return showMessage(`Error: El turno de ${timeStr} ya está OCUPADO para el ${formatDate(localDateTime)}.`, true);
-            }
-            
-            // PREPARAR DATOS PARA FIRESTORE
-            const newAppointmentData = {
-                clinicId: currentClinicId,
-                patientName,
-                patientPhone, 
-                dateTime: localDateTime, // Firestore lo convertirá a Timestamp
-                notes,
-                bookedBy: isEditing ? 'Médico (Editado)' : 'Médico',
+                // Simular delay de red para UX
+                setTimeout(() => {
+                    const newApt = {
+                        id: crypto.randomUUID(),
+                        consultoryId: selectedRoom,
+                        consultoryName: consultorios.find(c => c.id === selectedRoom).name,
+                        ...formData,
+                        date: selectedDate,
+                        slot: selectedSlot.label,
+                        timestamp: Date.now(),
+                        status: 'confirmed'
+                    };
+                    onSave(newApt);
+                    setIsSubmitting(false);
+                }, 800);
             };
 
-            try {
-                if (isEditing) {
-                    // ACTUALIZAR EN FIRESTORE
-                    await updateDoc(doc(getAppointmentsRef(), appointmentId), newAppointmentData);
-                    showMessage(`Turno de ${patientName} actualizado con éxito.`);
-                    resetAppointmentForm(); 
-                } else {
-                    // CREAR EN FIRESTORE
-                    await addDoc(getAppointmentsRef(), newAppointmentData);
-                    showMessage(`Turno para ${patientName} a las ${timeStr} agendado con éxito.`);
-                    document.getElementById('appointment-form').reset();
-                    resetAppointmentForm(); 
-                }
-            } catch (error) {
-                console.error("Error al guardar turno:", error);
-                showMessage("Error al guardar el turno. Revisa la consola.", true);
-            }
-        }
-        
-        function renderAppointmentsList(clinicId) {
-             // ... (Lógica de renderAppointmentsList idéntica a v17, pero con datos de Firestore)
-             const now = new Date();
-            const filteredAppointments = appointments
-                .filter(a => a.clinicId === clinicId)
-                .filter(a => a.dateTime >= now); 
-
-            if (filteredAppointments.length === 0) {
-                return `<p class="text-gray-500">No hay turnos futuros agendados para este consultorio.</p>`;
-            }
-
-            return filteredAppointments.map(app => `
-                <div class="appointment-item p-3 rounded-lg flex justify-between items-start text-dark-green">
-                    <div>
-                        <p class="font-bold text-base">${app.patientName} ${app.bookedBy === 'Online' ? '<span class="text-xs font-semibold bg-accent text-white px-1 rounded">WEB</span>' : ''}</p>
-                        <p class="text-sm text-gray-700">
-                            <span class="font-semibold">${formatTime(app.dateTime)}</span> (${formatDate(app.dateTime)}) | ${app.patientPhone}
-                        </p>
-                        ${app.notes ? `<p class="text-xs italic mt-1">${app.notes.substring(0, 50)}...</p>` : ''}
-                    </div>
-                    <div class="flex flex-col space-y-1">
-                        <button onclick="editAppointment('${app.id}')" class="btn-edit text-xs px-2 py-1 rounded-md font-semibold transition-colors">
-                            Editar
-                        </button>
-                        <button onclick="shareAppointment('${app.id}')" class="btn-share text-xs px-2 py-1 rounded-md font-semibold transition-colors">
-                            Compartir
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // --- VISTA: TURNOS ONLINE (PÚBLICO) ---
-
-        function renderPublicBookingView(initialClinicId, initialDate) {
-            const contentAreaEl = document.getElementById('content-area');
-            const selectedClinic = clinics.find(c => c.id === initialClinicId);
-            
-            if (!selectedClinic) {
-                 contentAreaEl.innerHTML = `<p class="p-8 text-center text-red-500">No hay consultorios disponibles para la reserva online.</p>`;
-                 return;
-            }
-
-            const defaultDate = formatInputDate(initialDate);
-
-            contentAreaEl.innerHTML = `
-                <div class="p-4 md:p-8">
-                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Reserva de Turnos Online</h2>
-                    
-                    <div class="card p-6 bg-white rounded-xl mb-8 max-w-2xl mx-auto">
-                        <h3 class="text-xl font-semibold mb-4 text-primary">Selecciona tu Cita</h3>
-                        
-                        <!-- Selectores de Consultorio y Fecha -->
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            <div>
-                                <label for="booking-clinic-select" class="block text-sm font-medium text-gray-700">Consultorio</label>
-                                <select id="booking-clinic-select" class="mt-1 block w-full p-2 border rounded-md shadow-sm">
-                                    ${clinics.map(c => `<option value="${c.id}" ${c.id === initialClinicId ? 'selected' : ''}>${c.name}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label for="booking-date" class="block text-sm font-medium text-gray-700">Fecha de la Cita</label>
-                                <input type="date" id="booking-date" required class="mt-1 block w-full p-2 border rounded-md shadow-sm" value="${defaultDate}" min="${defaultDate}">
-                            </div>
-                        </div>
-
-                        <!-- Slots Disponibles -->
-                        <h4 class="font-medium mt-6 mb-3 border-t pt-3">Horarios Disponibles para <span id="slots-date-display">${formatDate(initialDate)}</span>:</h4>
-                        <div id="available-slots-container" class="flex flex-wrap gap-2 min-h-20 bg-gray-50 p-3 rounded-md">
-                            <!-- Slots se cargarán aquí -->
-                            <p class="text-gray-500 w-full" id="slots-message">Cargando disponibilidad...</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Formulario de Reserva (Oculto hasta seleccionar slot) -->
-                    <div id="booking-form-container" class="card p-6 bg-white rounded-xl mb-8 hidden max-w-2xl mx-auto border-t-4 border-accent">
-                        <h3 class="text-xl font-semibold mb-4">Confirmar Reserva a las <span id="selected-time-display" class="text-accent"></span></h3>
-                        
-                        <form id="public-booking-form">
-                            <input type="hidden" id="public-booking-date-hidden">
-                            <input type="hidden" id="public-booking-time-hidden">
-                            <input type="hidden" id="public-booking-clinic-hidden">
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label for="public-patient-name" class="block text-sm font-medium text-gray-700">Tu Nombre Completo</label>
-                                    <input type="text" id="public-patient-name" required class="mt-1 block w-full p-2 border rounded-md shadow-sm">
-                                </div>
-                                <div>
-                                    <label for="public-patient-phone" class="block text-sm font-medium text-gray-700">Tu Teléfono</label>
-                                    <input type="tel" id="public-patient-phone" required class="mt-1 block w-full p-2 border rounded-md shadow-sm">
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label for="public-notes" class="block text-sm font-medium text-gray-700">Motivo/Notas (Opcional)</label>
-                                    <textarea id="public-notes" rows="2" class="mt-1 block w-full p-2 border rounded-md shadow-sm"></textarea>
-                                </div>
-                            </div>
-                            
-                            <button type="submit" class="action-button mt-6 px-4 py-2 rounded-lg bg-accent hover:bg-primary">
-                                Reservar Cita
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            `;
-
-            // Inicializar Listeners de la vista pública
-            document.getElementById('booking-clinic-select').addEventListener('change', (e) => {
-                const newClinicId = e.target.value;
-                const today = new Date();
-                const nextActiveDay = getNextActiveDay(newClinicId, today, 1);
-                document.getElementById('booking-date').value = formatInputDate(nextActiveDay);
-                loadAvailableSlots(newClinicId, nextActiveDay);
-                document.getElementById('booking-form-container').classList.add('hidden');
-            });
-
-            document.getElementById('booking-date').addEventListener('change', (e) => {
-                const newDateStr = e.target.value;
-                const [year, month, day] = newDateStr.split('-').map(Number);
-                const newDate = new Date(year, month - 1, day);
-                newDate.setHours(0, 0, 0, 0);
-
-                const clinicId = document.getElementById('booking-clinic-select').value;
-
-                if (!isClinicDayActive(clinics.find(c => c.id === clinicId), newDate)) {
-                    showMessage("El consultorio está cerrado en esta fecha. Seleccione un día activo.", true);
-                    // Forzar a la fecha anterior si es inválida
-                    const today = new Date();
-                    e.target.value = formatInputDate(getNextActiveDay(clinicId, today, 1));
-                    newDate.setTime(today.getTime()); 
-                }
-                loadAvailableSlots(clinicId, newDate);
-                document.getElementById('booking-form-container').classList.add('hidden');
-            });
-            
-            document.getElementById('public-booking-form').onsubmit = handlePublicBookingSubmit;
-            
-            // Cargar slots iniciales
-            loadAvailableSlots(initialClinicId, initialDate);
-        }
-
-        function loadAvailableSlots(clinicId, date) {
-            const clinic = clinics.find(c => c.id === clinicId);
-            const slotsContainer = document.getElementById('available-slots-container');
-            const slotsMessage = document.getElementById('slots-message');
-            const dateDisplay = document.getElementById('slots-date-display');
-            
-            // FIX: Verificar si los elementos del DOM existen antes de usarlos (solución al TypeError)
-            if (!clinic || !slotsContainer || !slotsMessage || !dateDisplay) return;
-
-            dateDisplay.textContent = formatDate(date);
-            slotsContainer.innerHTML = '';
-            slotsMessage.classList.remove('hidden');
-
-            if (!isClinicDayActive(clinic, date)) {
-                slotsMessage.textContent = `🚫 El consultorio "${clinic.name}" está cerrado el ${DAY_NAMES_FULL[date.getDay()]}, ${formatDate(date)}.`;
-                return;
-            }
-
-            const availableSlots = getAvailableSlots(clinic, date);
-            
-            if (availableSlots.length === 0) {
-                slotsMessage.textContent = '¡Agenda Llena! No hay horarios disponibles para este día.';
-                return;
-            }
-
-            slotsMessage.classList.add('hidden');
-            availableSlots.forEach(time => {
-                const button = document.createElement('button');
-                button.textContent = time;
-                button.className = 'bg-primary text-white hover:bg-accent px-4 py-2 rounded-lg font-semibold transition-colors';
-                button.onclick = () => selectSlot(clinicId, date, time);
-                slotsContainer.appendChild(button);
-            });
-        }
-        
-        window.selectSlot = function(clinicId, date, time) {
-            const formContainer = document.getElementById('booking-form-container');
-            
-            // Llenar campos ocultos
-            document.getElementById('public-booking-clinic-hidden').value = clinicId;
-            document.getElementById('public-booking-date-hidden').value = formatInputDate(date);
-            document.getElementById('public-booking-time-hidden').value = time;
-            
-            // Mostrar hora y formulario
-            document.getElementById('selected-time-display').textContent = time;
-            formContainer.classList.remove('hidden');
-            formContainer.scrollIntoView({ behavior: 'smooth' });
-            
-            // Deseleccionar slots previamente seleccionados
-            document.querySelectorAll('#available-slots-container button').forEach(btn => {
-                btn.classList.remove('ring-4', 'ring-accent', 'ring-opacity-50');
-                if (btn.textContent === time) {
-                    btn.classList.add('ring-4', 'ring-accent', 'ring-opacity-50');
-                }
-            });
-        }
-
-        async function handlePublicBookingSubmit(e) {
-            e.preventDefault();
-
-            const clinicId = document.getElementById('public-booking-clinic-hidden').value;
-            const dateStr = document.getElementById('public-booking-date-hidden').value;
-            const timeStr = document.getElementById('public-booking-time-hidden').value;
-            
-            const patientName = document.getElementById('public-patient-name').value.trim();
-            const patientPhone = document.getElementById('public-patient-phone').value.trim();
-            const notes = document.getElementById('public-notes').value.trim();
-
-            if (!patientName || !patientPhone) {
-                return showMessage("Por favor, ingrese su nombre y teléfono.", true);
-            }
-
-            // 1. Crear el objeto de fecha/hora (y validar rápidamente si el slot sigue libre)
-            const [year, month, day] = dateStr.split('-').map(Number);
-            const [hour, minute] = timeStr.split(':').map(Number);
-            const localDateTime = new Date(year, month - 1, day, hour, minute);
-
-            const selectedClinic = clinics.find(c => c.id === clinicId);
-            const reqMinutes = getTimeInMinutes(timeStr);
-
-            // Re-validar si el slot está ocupado justo antes de reservar (para evitar duplicados online)
-            const appointmentsForDay = appointments
-                .filter(a => a.clinicId === clinicId)
-                .filter(a => formatDate(a.dateTime) === formatDate(localDateTime));
-                
-            const isSlotOccupied = appointmentsForDay.some(a => getTimeInMinutes(formatTime(a.dateTime)) === reqMinutes);
-            
-            if (isSlotOccupied) {
-                showMessage(`¡Lo sentimos! El turno de ${timeStr} acaba de ser reservado. Por favor, seleccione otro horario.`, true);
-                loadAvailableSlots(clinicId, localDateTime); // Refresca los slots
-                document.getElementById('booking-form-container').classList.add('hidden');
-                return;
-            }
-
-            // 2. PREPARAR DATOS PARA FIRESTORE
-            const bookingData = {
-                clinicId: clinicId,
-                patientName,
-                patientPhone, 
-                dateTime: localDateTime, 
-                notes,
-                bookedBy: 'Online', // Marca para distinguir de la reserva del médico
-            };
-
-            try {
-                // CREAR EN FIRESTORE
-                await addDoc(getAppointmentsRef(), bookingData);
-                
-                showMessage(`✅ ¡Turno reservado con éxito! Recibirás una confirmación.`, false);
-                document.getElementById('public-booking-form').reset();
-                document.getElementById('booking-form-container').classList.add('hidden');
-                
-                // Forzar un refresh del selector y slots
-                loadAvailableSlots(clinicId, localDateTime);
-
-            } catch (error) {
-                console.error("Error al reservar turno online:", error);
-                showMessage("Error al procesar la reserva. Inténtelo de nuevo.", true);
-            }
-        }
-
-        // --- VISTA: AGENDA DIARIA (Uso Médico) ---
-        
-        function renderScheduleView() {
-            // ... (Lógica de renderScheduleView idéntica a v17)
-            const clinic = clinics.find(c => c.id === currentClinicId);
-            if (!clinic) return; 
-
-            const today = currentViewDate; 
-            const dayIndex = today.getDay();
-            const dayName = DAY_NAMES_FULL[dayIndex];
-            
-            const isWorkingDay = isClinicDayActive(clinic, today);
-            
-            if (!isWorkingDay) {
-                contentAreaEl.innerHTML = `
-                    <div class="p-8 text-center text-xl text-red-500">
-                        Error de navegación: El día ${dayName}, ${formatDate(today)} no está activo para el consultorio.
-                        <button onclick="showView('schedule')" class="action-button mt-4 px-6 py-2 rounded-lg">Ir al Próximo Día Activo</button>
-                    </div>
-                `;
-                return;
-            }
-
-            const daySchedule = clinic.schedule?.[dayIndex];
-
-            const appointmentsForDay = appointments
-                .filter(a => a.clinicId === clinic.id)
-                .filter(a => formatDate(a.dateTime) === formatDate(today));
-
-            let capacityInfo = '';
-            let maxSlots = 0;
-            let reserved = appointmentsForDay.length;
-            
-            if (isWorkingDay) {
-                const startM = getTimeInMinutes(daySchedule.start);
-                const endM = getTimeInMinutes(daySchedule.end);
-                const totalM = endM - startM;
-                maxSlots = Math.floor(totalM / clinic.appointmentDuration);
-                
-                capacityInfo = `
-                    <p class="text-sm text-gray-700 mt-2">
-                        Duración por consulta: <span class="font-semibold">${clinic.appointmentDuration} min</span>. 
-                        Slots ocupados: <span class="font-bold ${reserved >= maxSlots ? 'text-red-600' : 'text-primary'}">${reserved} / ${maxSlots}</span>
-                    </p>
-                `;
-            }
-
-            const html = `
-                <div class="p-4 md:p-8">
-                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Agenda Diaria: ${clinic.name}</h2>
-                    
-                    <!-- Controles de Navegación -->
-                    <div class="flex flex-wrap justify-between items-center mb-6 p-3 bg-white rounded-xl card max-w-xl mx-auto">
-                        <span class="text-lg font-semibold w-12 text-center text-dark-green hidden md:block">Agenda:</span>
-                        <div class="flex items-center space-x-3 w-full justify-between md:w-auto">
-                            <button onclick="navigateSchedule(-1)" class="action-button px-3 py-1 rounded-full text-xl hover:scale-110 transition-transform">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M15 18l-6-6 6-6"/></svg>
-                            </button>
-                            <span class="text-lg font-semibold w-full text-center md:w-48" id="current-date-display">${dayName}, ${formatDate(today)}</span>
-                            <button onclick="navigateSchedule(1)" class="action-button px-3 py-1 rounded-full text-xl hover:scale-110 transition-transform">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M9 18l6-6-6-6"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- Fin Controles de Navegación -->
-
-
-                    <div class="bg-white p-6 rounded-xl card max-w-xl mx-auto">
-                        <h3 class="text-xl font-bold mb-4">Agenda para ${dayName}, ${formatDate(today)}</h3>
-                        
-                        <p class="text-primary mb-4">Horario de Atención: ${daySchedule.start} - ${daySchedule.end}</p> ${capacityInfo}
-                        
-                        <h4 class="font-semibold mb-3 border-t pt-3">Turnos:</h4>
-                        <div class="space-y-3">
-                            ${appointmentsForDay.length > 0 ? appointmentsForDay.map(app => `
-                                <div class="appointment-item card p-4 mb-3 rounded-lg flex justify-between items-start text-dark-green">
+            if (step === 1) {
+                return (
+                    <div className="fade-in">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Seleccione un Consultorio</h2>
+                        <div className="grid md:grid-cols-3 gap-6">
+                            {consultorios.map(room => (
+                                <Card key={room.id} className="cursor-pointer hover:border-medical-500 hover:shadow-md transition-all h-full flex flex-col justify-between" onClick={() => { setSelectedRoom(room.id); setStep(2); }}>
                                     <div>
-                                        <p class="font-bold text-lg">${app.patientName} ${app.bookedBy === 'Online' ? '<span class="text-xs font-semibold bg-accent text-white px-1 rounded">WEB</span>' : ''}</p>
-                                        <p class="text-base text-gray-700">${formatTime(app.dateTime)} | ${app.patientPhone}</p>
-                                        ${app.notes ? `<p class="text-sm italic mt-1 text-gray-600">Notas: ${app.notes}</p>` : ''}
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="bg-medical-100 p-2 rounded-lg text-medical-700">
+                                                <MapPin size={24} />
+                                            </div>
+                                            <h3 className="font-bold text-lg text-gray-800">{room.name}</h3>
+                                        </div>
+                                        <p className="text-gray-500 text-sm mb-2">{room.address}</p>
+                                        <div className="flex flex-wrap gap-1 mb-4">
+                                            {room.insurances.slice(0, 2).map(ins => (
+                                                <span key={ins} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{ins}</span>
+                                            ))}
+                                            {room.insurances.length > 2 && <span className="text-xs text-gray-400 self-center">+{room.insurances.length - 2} más</span>}
+                                        </div>
                                     </div>
-                                    <div class="flex flex-col space-y-1">
-                                        <button onclick="editAppointment('${app.id}')" class="btn-edit text-xs px-2 py-1 rounded-md font-semibold transition-colors">
-                                            Editar
-                                        </button>
-                                        <button onclick="shareAppointment('${app.id}')" class="btn-share text-xs px-2 py-1 rounded-md font-semibold transition-colors">
-                                            Compartir
-                                        </button>
+                                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm text-medical-700 font-medium">
+                                        <span>Turnos de {room.duration} min</span>
+                                        <ChevronRight size={16} />
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            const activeRoom = consultorios.find(r => r.id === selectedRoom);
+            const DAYS_LABEL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+            return (
+                <div className="max-w-4xl mx-auto fade-in">
+                    <button onClick={() => setStep(1)} className="text-gray-500 hover:text-medical-600 mb-4 flex items-center gap-1 text-sm">
+                        &larr; Volver a consultorios
+                    </button>
+                    
+                    <div className="grid md:grid-cols-3 gap-8">
+                        {/* Columna Izquierda: Formulario */}
+                        <div className="md:col-span-2">
+                            <Card>
+                                <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <User size={20} className="text-medical-600"/> Datos del Paciente
+                                </h3>
+                                <form id="bookingForm" onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre y Apellido</label>
+                                            <input required type="text" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
+                                                value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Edad</label>
+                                            <input required type="number" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
+                                                value={formData.age} onChange={e => setFormData({...formData, age: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                                            <input required type="tel" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none" 
+                                                value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Cobertura Médica</label>
+                                            <select required className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none bg-white"
+                                                value={formData.insurance} onChange={e => setFormData({...formData, insurance: e.target.value})}>
+                                                <option value="">Seleccionar...</option>
+                                                {activeRoom.insurances.map(ins => <option key={ins} value={ins}>{ins}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 mt-4 border-t border-gray-100">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Fecha del Turno</label>
+                                        <input type="date" required 
+                                            min={new Date().toISOString().split('T')[0]}
+                                            className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-medical-500 outline-none"
+                                            value={selectedDate} onChange={e => { setSelectedDate(e.target.value); setSelectedSlot(null); }} />
+                                    </div>
+
+                                    <div className="mt-4">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Horarios Disponibles</label>
+                                        {availableSlots.length === 0 ? (
+                                            <div className="p-4 bg-orange-50 text-orange-700 rounded-lg text-center text-sm border border-orange-100 flex flex-col items-center gap-1">
+                                                <span className="font-semibold">Sin turnos disponibles</span>
+                                                <span className="text-xs">
+                                                    El consultorio atiende: {activeRoom.days.map(d => DAYS_LABEL[d]).join(', ')}.
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2">
+                                                {availableSlots.map((slot, idx) => (
+                                                    <button 
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => setSelectedSlot(slot)}
+                                                        className={`text-sm py-2 px-1 rounded-md border transition-colors ${
+                                                            selectedSlot?.label === slot.label 
+                                                            ? 'bg-medical-600 text-white border-medical-600 shadow-inner' 
+                                                            : slot.priority === 1 
+                                                                ? 'bg-medical-50 text-medical-800 border-medical-200 hover:bg-medical-100' // Agrupado (sugerido)
+                                                                : 'bg-white text-gray-700 border-gray-200 hover:border-medical-300'
+                                                        }`}
+                                                    >
+                                                        {slot.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {availableSlots.some(s => s.priority === 1) && (
+                                            <p className="text-xs text-medical-600 mt-2 flex items-center gap-1">
+                                                <Clock size={12}/> Los horarios resaltados optimizan la agenda.
+                                            </p>
+                                        )}
+                                    </div>
+                                </form>
+                            </Card>
+                        </div>
+
+                        {/* Columna Derecha: Resumen */}
+                        <div>
+                            <Card className="bg-medical-50 border-medical-200 h-full sticky top-24">
+                                <h3 className="font-bold text-medical-900 mb-4">Resumen del Turno</h3>
+                                <div className="space-y-3 text-sm">
+                                    <div className="flex justify-between border-b border-medical-200 pb-2">
+                                        <span className="text-medical-700">Consultorio:</span>
+                                        <span className="font-medium text-right w-1/2">{activeRoom.name}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-medical-200 pb-2">
+                                        <span className="text-medical-700">Fecha:</span>
+                                        <span className="font-medium">{formatDateDisplay(selectedDate)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-medical-200 pb-2">
+                                        <span className="text-medical-700">Horario:</span>
+                                        <span className={`font-bold ${selectedSlot ? 'text-medical-800' : 'text-gray-400'}`}>
+                                            {selectedSlot ? selectedSlot.label : '--:--'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between pt-2">
+                                        <span className="text-medical-700">Paciente:</span>
+                                        <span className="font-medium truncate">{formData.name || '-'}</span>
                                     </div>
                                 </div>
-                            `).join('') : '<p class="text-gray-500">No hay turnos para este día.</p>'}
+
+                                <div className="mt-8">
+                                    <Button fullWidth onClick={handleSubmit} disabled={!selectedSlot || !formData.name || isSubmitting}>
+                                        {isSubmitting ? 'Confirmando...' : 'Confirmar Turno'}
+                                    </Button>
+                                    <p className="text-xs text-center text-gray-500 mt-3">
+                                        Al confirmar, los datos se guardarán localmente primero.
+                                    </p>
+                                </div>
+                            </Card>
                         </div>
                     </div>
                 </div>
-            `;
-            contentAreaEl.innerHTML = html;
-        }
+            );
+        };
 
-        window.navigateSchedule = function(direction) {
-            currentViewDate.setDate(currentViewDate.getDate() + direction);
-            
-            currentViewDate = getNextActiveDay(currentClinicId, currentViewDate, direction);
-            
-            renderScheduleView();
-        }
-        
-        // --- INICIO DE LA APLICACIÓN ---
-        window.onload = () => {
-            // La inicialización ahora espera la autenticación en onAuthStateChanged
-        }
+        // --- VISTA PROFESIONAL ---
+
+        const ProfessionalView = ({ consultorios, appointments }) => {
+            const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+            const [filterRoom, setFilterRoom] = useState('all');
+
+            const filteredAppointments = useMemo(() => {
+                return appointments
+                    .filter(apt => {
+                        const matchDate = apt.date === filterDate;
+                        const matchRoom = filterRoom === 'all' || apt.consultoryId === parseInt(filterRoom);
+                        return matchDate && matchRoom;
+                    })
+                    .sort((a, b) => a.slot.localeCompare(b.slot));
+            }, [appointments, filterDate, filterRoom]);
+
+            return (
+                <div className="fade-in space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h2 className="text-2xl font-bold text-gray-800">Agenda Médica</h2>
+                        
+                        <div className="flex gap-3 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+                            <input 
+                                type="date" 
+                                className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none"
+                                value={filterDate}
+                                onChange={(e) => setFilterDate(e.target.value)}
+                            />
+                            <select 
+                                className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none bg-white"
+                                value={filterRoom}
+                                onChange={(e) => setFilterRoom(e.target.value)}
+                            >
+                                <option value="all">Todos los Consultorios</option>
+                                {consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-4 gap-6">
+                        {/* Estadísticas Rápidas */}
+                        <Card className="md:col-span-4 bg-gradient-to-r from-medical-600 to-teal-500 text-white border-none">
+                            <div className="flex justify-around text-center">
+                                <div>
+                                    <p className="text-medical-100 text-sm font-medium">Total Turnos Hoy</p>
+                                    <p className="text-3xl font-bold">{filteredAppointments.length}</p>
+                                </div>
+                                <div className="border-l border-medical-400 pl-8">
+                                    <p className="text-medical-100 text-sm font-medium">Consultorios Activos</p>
+                                    <p className="text-3xl font-bold">
+                                        {filterRoom === 'all' 
+                                            ? new Set(filteredAppointments.map(a => a.consultoryId)).size 
+                                            : (filteredAppointments.length > 0 ? 1 : 0)}
+                                    </p>
+                                </div>
+                                <div className="border-l border-medical-400 pl-8 hidden sm:block">
+                                    <p className="text-medical-100 text-sm font-medium">Obras Sociales</p>
+                                    <p className="text-3xl font-bold">
+                                        {new Set(filteredAppointments.map(a => a.insurance)).size}
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* Listado */}
+                        <div className="md:col-span-4">
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                    <h3 className="font-bold text-gray-700">Listado de Pacientes</h3>
+                                    <span className="text-xs font-medium text-gray-500">{formatDateDisplay(filterDate)}</span>
+                                </div>
+                                
+                                {filteredAppointments.length === 0 ? (
+                                    <div className="p-12 text-center text-gray-400">
+                                        <Calendar size={48} className="mx-auto mb-3 opacity-20" />
+                                        <p>No hay turnos registrados para este criterio.</p>
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-gray-100">
+                                        {filteredAppointments.map(apt => (
+                                            <div key={apt.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px]">
+                                                        {apt.slot}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-gray-900">{apt.name} <span className="text-xs font-normal text-gray-500">({apt.age} años)</span></h4>
+                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
+                                                            <span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span>
+                                                            <span className="flex items-center gap-1"><Stethoscope size={14}/> {apt.insurance}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 md:justify-end">
+                                                    <a href={`tel:${apt.phone}`} className="p-2 text-gray-400 hover:text-medical-600 hover:bg-medical-50 rounded-full transition-colors" title="Llamar">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                                    </a>
+                                                    <span className="text-xs font-medium px-2 py-1 bg-green-100 text-green-700 rounded-full">Confirmado</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
-</head>
-<body class="min-h-screen">
-    <div id="app-container" class="max-w-7xl mx-auto p-4 md:p-8">
-        
-        <!-- Mensaje de Feedback Temporal -->
-        <div id="feedback-message" class="hidden fixed top-4 right-4 p-4 rounded-xl border-l-4 font-medium z-50 transition-all"></div>
-
-        <!-- Encabezado y Navegación -->
-        <header class="mb-8 p-4 rounded-xl card header-title flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <h1 class="text-3xl font-extrabold text-dark-green">
-                Agenda de Consultorios Online
-            </h1>
-            <nav>
-                <ul class="flex flex-wrap justify-center md:justify-end space-x-2 md:space-x-4">
-                    <li><button onclick="showView('schedule')" class="nav-item px-4 py-2 rounded-lg transition-colors">Agenda Diaria</button></li>
-                    <li><button onclick="showView('appointments')" class="nav-item px-4 py-2 rounded-lg transition-colors">Agendar Turno (Médico)</button></li>
-                    <li><button onclick="showView('manage-clinics')" class="nav-item px-4 py-2 rounded-lg transition-colors">Gestión de Consultorios</button></li>
-                    <li><button onclick="showView('public-booking')" class="nav-item px-4 py-2 rounded-lg transition-colors bg-accent hover:bg-primary text-white">Turnos Online (Público)</button></li>
-                </ul>
-            </nav>
-        </header>
-
-        <!-- Selector de Consultorios (Solo visible para vistas de gestión) -->
-        <div id="clinic-selector-container" class="mb-6 p-4 bg-white rounded-xl card flex items-center space-x-4 hidden">
-            <label for="clinic-select" class="font-semibold text-dark-green whitespace-nowrap">Consultorio Actual:</label>
-            <select id="clinic-select" class="flex-grow p-2 border rounded-md shadow-sm"></select>
-        </div>
-
-        <!-- Estado de Autenticación y Carga (Ahora con Firebase) -->
-        <div class="text-sm text-gray-500 mb-4 flex flex-wrap justify-between items-center">
-            <span id="auth-status">Estado: Conectando...</span>
-            <span id="user-id-display" class="truncate max-w-xs">ID de Usuario: (Obteniendo...)</span>
-        </div>
-
-        <div id="loading-message" class="text-center p-8 text-xl font-medium">Conectando a Firebase y cargando datos...</div>
-
-        <!-- Área de Contenido Principal (Vistas) -->
-        <main id="content-area">
-            <!-- Contenido inyectado -->
-        </main>
-        
-    </div>
 </body>
 </html>
