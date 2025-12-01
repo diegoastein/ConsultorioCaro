@@ -3,1317 +3,1366 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seguimiento Pediátrico</title>
-    <!-- Carga de Tailwind CSS -->
+    <title>Agenda de Consultorios Online</title>
+    <!-- Carga de Tailwind CSS para un diseño limpio y responsivo -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carga de un set de íconos (Heroicons) -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/heroicons@2.1.3/24/outline/index.js"></script>
-    <style>
-        /* Estilo para ocultar páginas que no están activas */
-        .page { display: none; }
-        .page.active { display: block; }
-        textarea { resize: vertical; }
-        
-        /* Estilos para los modales */
-        #modal-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 40;
-            display: none; /* Oculto por defecto */
-        }
-        .modal-box {
-            position: fixed;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            z-index: 50;
-            width: 90%;
-            max-width: 400px;
-            display: none; /* Oculto por defecto */
-        }
-        .modal-box.active {
-            display: block;
-        }
-        #modal-overlay.active {
-            display: block;
-        }
-    </style>
-</head>
-<body class="bg-gray-100 font-sans text-gray-800">
-
-    <div id="app" class="max-w-4xl mx-auto min-h-screen">
-
-        <!-- ===== 0. PÁGINA: CARGANDO ===== -->
-        <div id="page-loading" class="page active p-4 text-center pt-32">
-            <h1 class="text-2xl font-bold text-teal-800">Cargando...</h1>
-            <p class="text-gray-600">Conectando a la base de datos.</p>
-        </div>
-
-        <!-- ===== 1. PÁGINA: LISTA DE PACIENTES ===== -->
-        <div id="page-list" class="page p-4">
-            <header class="flex justify-between items-center mb-6">
-                <h1 class="text-3xl font-bold text-teal-800">Pacientes</h1>
-                <div>
-                    <button id="btn-admin-nav" class="p-2 text-gray-600 hover:text-teal-800">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-1.007 1.11-1.226m-2.22 2.452a11.95 11.95 0 0 0-6.897 6.897c-.09.542-.56 1.007-1.11 1.226m2.22-2.452a11.95 11.95 0 0 1 6.897 6.897c.09.542.56 1.007 1.11 1.226m-2.22-2.452a11.95 11.95 0 0 0 6.897-6.897c.09-.542.56-1.007 1.11-1.226m-2.22 2.452 6.897-6.897c.09-.542.56-1.007 1.11-1.226M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" />
-                        </svg>
-                    </button>
-                    <button id="btn-add-patient-nav" class="p-2 text-white bg-teal-600 rounded-full shadow-lg hover:bg-teal-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                    </button>
-                </div>
-            </header>
-            <div class="mb-4">
-                <input type="text" id="search-patient" placeholder="Buscar paciente..." class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
-            </div>
-            <div id="patient-list-container">
-                <!-- Los pacientes se cargarán aquí dinámicamente -->
-            </div>
-        </div>
-
-        <!-- ===== 2. PÁGINA: DETALLE DEL PACIENTE ===== -->
-        <div id="page-patient-detail" class="page p-4">
-            <header class="flex justify-between items-center mb-6">
-                <button class="btn-back p-2 text-gray-600 hover:text-teal-800" data-target="page-list">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                    </svg>
-                </button>
-                <h1 id="detail-nombre" class="text-2xl font-bold text-teal-800 truncate">Detalle del Paciente</h1>
-                <button id="btn-edit-patient" class="p-2 text-gray-600 hover:text-teal-800">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
-                    </svg>
-                </button>
-            </header>
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <button id="btn-new-consult" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow hover:bg-teal-700 mb-6 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mr-2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                    Ingresar a Consulta
-                </button>
-                <div id="detail-pendientes-container" class="mb-4">
-                    <h3 class="text-lg font-semibold text-red-600 mb-2">Pendientes</h3>
-                    <div id="detail-pendientes" class="bg-red-50 p-3 rounded-lg text-red-800 min-h-[50px]"></div>
-                </div>
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">Próxima Consulta</h3>
-                    <p id="detail-proxima-consulta" class="text-lg"></p>
-                </div>
-                <h3 class="text-xl font-semibold mt-6 mb-3 border-b pb-2 text-gray-700">Datos Personales</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><strong class="block text-gray-500">Edad</strong><span id="detail-edad"></span></div>
-                    <div><strong class="block text-gray-500">Fec. Nacimiento</strong><span id="detail-dob"></span></div>
-                    <div><strong class="block text-gray-500">Madre</strong><span id="detail-madre"></span></div>
-                    <div><strong class="block text-gray-500">Teléfono</strong><span id="detail-telefono"></span></div>
-                    <div><strong class="block text-gray-500">Cobertura</strong><span id="detail-cobertura"></span></div>
-                    <div><strong class="block text-gray-500">Lugar Atención</strong><span id="detail-lugar"></span></div>
-                </div>
-                <h3 class="text-xl font-semibold mt-6 mb-3 border-b pb-2 text-gray-700">Nacimiento</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><strong class="block text-gray-500">Peso al Nacer</strong><span id="detail-peso-nacer"></span></div>
-                    <div><strong class="block text-gray-500">Edad Gestacional</strong><span id="detail-eg"></span></div>
-                </div>
-                <h3 class="text-xl font-semibold mt-6 mb-3 border-b pb-2 text-gray-700">Antecedentes y Notas</h3>
-                <div>
-                    <strong class="block text-gray-500 mb-1">Antecedentes Relevantes</strong>
-                    <div id="detail-antecedentes" class="flex flex-wrap gap-2"></div>
-                </div>
-                <div class="mt-4">
-                    <strong class="block text-gray-500 mb-1">Notas</strong>
-                    <p id="detail-notas" class="whitespace-pre-wrap"></p>
-                </div>
-            </div>
-            <h2 class="text-2xl font-bold text-teal-800 mt-8 mb-4">Historial de Consultas</h2>
-            <div id="consult-history-container" class="space-y-4">
-                <!-- Las consultas anteriores se cargarán aquí -->
-            </div>
-        </div>
-        
-        <!-- ===== 3. PÁGINA: FORMULARIO PACIENTE (Nuevo/Editar) ===== -->
-        <div id="page-patient-form" class="page p-4">
-            <header class="flex justify-start items-center mb-6">
-                <button class="btn-back p-2 text-gray-600 hover:text-teal-800" data-target="page-list">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                    </svg>
-                </button>
-                <h1 id="patient-form-title" class="text-2xl font-bold text-teal-800 ml-4">Nuevo Paciente</h1>
-            </header>
-            <form id="form-patient" class="bg-white rounded-lg shadow-md p-6 space-y-4">
-                <input type="hidden" id="patient-id">
-                <div>
-                    <label for="nombre" class="block text-sm font-medium text-gray-600">Nombre y Apellido</label>
-                    <input type="text" id="nombre" class="mt-1 p-2 w-full border border-gray-300 rounded-lg" required>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="madre" class="block text-sm font-medium text-gray-600">Nombre de la Madre</label>
-                        <input type="text" id="madre" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                    <div>
-                        <label for="telefono" class="block text-sm font-medium text-gray-600">Teléfono de la Madre</label>
-                        <input type="tel" id="telefono" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="dob" class="block text-sm font-medium text-gray-600">Fecha de Nacimiento</label>
-                        <input type="date" id="dob" class="mt-1 p-2 w-full border border-gray-300 rounded-lg" required>
-                    </div>
-                    <div>
-                        <label for="cobertura" class="block text-sm font-medium text-gray-600">Cobertura Médica</label>
-                        <select id="cobertura" class="mt-1 p-2 w-full border border-gray-300 rounded-lg"></select>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="peso-nacer" class="block text-sm font-medium text-gray-600">Peso al Nacer (grs)</label>
-                        <input type="number" id="peso-nacer" placeholder="Ej: 3200" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                    <div>
-                        <label for="eg" class="block text-sm font-medium text-gray-600">Edad Gestacional (sem)</label>
-                        <input type="number" id="eg" placeholder="Ej: 39" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                </div>
-                <div>
-                    <label for="lugar" class="block text-sm font-medium text-gray-600">Lugar de Atención</label>
-                    <select id="lugar" class="mt-1 p-2 w-full border border-gray-300 rounded-lg"></select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-600">Antecedentes Relevantes</label>
-                    <div class="relative">
-                        <button type="button" id="antecedentes-trigger" class="mt-1 bg-white p-2 w-full border border-gray-300 rounded-lg text-left flex justify-between items-center">
-                            <span id="antecedentes-trigger-text" class="text-gray-500 truncate">Seleccione...</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-400">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                            </svg>
-                        </button>
-                        <div id="antecedentes-dropdown" class="hidden absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            <ul id="antecedentes-options-list">
-                                <!-- Las opciones se cargarán aquí -->
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <label for="notas" class="block text-sm font-medium text-gray-600">Notas Generales</label>
-                    <textarea id="notas" rows="4" class="mt-1 p-2 w-full border border-gray-300 rounded-lg" placeholder="Notas generales del paciente..."></textarea>
-                </div>
-                <div class="flex gap-4 pt-4">
-                    <button type="button" class="btn-cancel w-1/2 bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300" data-target="page-patient-detail">Cancelar</button>
-                    <button type="submit" class="w-1/2 bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow hover:bg-teal-700">Guardar Paciente</button>
-                </div>
-            </form>
-        </div>
-        
-        <!-- ===== 4. PÁGINA: FORMULARIO DE CONSULTA (Nueva) ===== -->
-        <div id="page-consult-form" class="page p-4">
-            <header class="flex justify-start items-center mb-6">
-                <button class="btn-back p-2 text-gray-600 hover:text-teal-800" data-target="page-patient-detail">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                    </svg>
-                </button>
-                <h1 class="text-2xl font-bold text-teal-800 ml-4">Nueva Consulta</h1>
-            </header>
-            <h2 id="consult-patient-name" class="text-xl font-semibold text-center mb-6"></h2>
-            <form id="form-consult" class="bg-white rounded-lg shadow-md p-6 space-y-4">
-                <input type="hidden" id="consult-id">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="consult-fecha" class="block text-sm font-medium text-gray-600">Fecha de Consulta</label>
-                        <input type="date" id="consult-fecha" class="mt-1 p-2 w-full border border-gray-300 rounded-lg" required>
-                    </div>
-                    <div>
-                        <label for="consult-motivo" class="block text-sm font-medium text-gray-600">Motivo de Consulta</label>
-                        <select id="consult-motivo" class="mt-1 p-2 w-full border border-gray-300 rounded-lg"></select>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label for="consult-peso" class="block text-sm font-medium text-gray-600">Peso (kg)</label>
-                        <input type="number" step="0.01" id="consult-peso" placeholder="Ej: 5.200" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                    <div>
-                        <label for="consult-talla" class="block text-sm font-medium text-gray-600">Talla (cm)</label>
-                        <input type="number" step="0.1" id="consult-talla" placeholder="Ej: 55.5" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                    <div>
-                        <label for="consult-pc" class="block text-sm font-medium text-gray-600">Perímetro Cef. (cm)</label>
-                        <input type="number" step="0.1" id="consult-pc" placeholder="Ej: 38.2" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-600">Control de Vacunas</label>
-                    <div class="flex gap-4 mt-2">
-                        <label class="flex items-center">
-                            <input type="radio" name="vacunas" value="Completa" class="mr-2 text-teal-600 focus:ring-teal-500"> Completa
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="vacunas" value="Sin completar" class="mr-2 text-teal-600 focus:ring-teal-500"> Sin completar
-                        </label>
-                    </div>
-                </div>
-                <div id="consult-pendientes-container">
-                    <label class="block text-sm font-medium text-red-600">Pendientes Anteriores</label>
-                    <div id="consult-pendientes-viejos" class="mt-1 p-3 w-full bg-red-50 text-red-800 border border-red-200 rounded-lg min-h-[50px]"></div>
-                    <button type="button" id="btn-resolve-pendientes" class="mt-2 text-sm text-gray-600 hover:text-black underline">Marcar como resueltos</button>
-                </div>
-                <div>
-                    <label for="consult-notas" class="block text-sm font-medium text-gray-600">Notas de la Consulta</label>
-                    <textarea id="consult-notas" rows="6" class="mt-1 p-2 w-full border border-gray-300 rounded-lg"></textarea>
-                </div>
-                <div>
-                    <label for="consult-pendientes-nuevos" class="block text-sm font-medium text-gray-600">Pendientes (para la próxima)</label>
-                    <textarea id="consult-pendientes-nuevos" rows="3" class="mt-1 p-2 w-full border border-gray-300 rounded-lg" placeholder="Anotar aquí lo que queda pendiente..."></textarea>
-                </div>
-                <div>
-                    <label for="consult-proxima" class="block text-sm font-medium text-gray-600">Programar Próxima Consulta</label>
-                    <input type="date" id="consult-proxima" class="mt-1 p-2 w-full border border-gray-300 rounded-lg">
-                </div>
-                <div class="flex gap-4 pt-4">
-                    <button type="button" class="btn-cancel w-1/2 bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300" data-target="page-patient-detail">Cancelar</button>
-                    <button type="submit" class="w-1/2 bg-teal-600 text-white font-bold py-3 px-4 rounded-lg shadow hover:bg-teal-700">Guardar Consulta</button>
-                </div>
-            </form>
-        </div>
-
-
-        <!-- ===== 5. PÁGINA: ADMINISTRACIÓN ===== -->
-        <div id="page-admin" class="page p-4">
-            <header class="flex justify-start items-center mb-6">
-                <button class="btn-back p-2 text-gray-600 hover:text-teal-800" data-target="page-list">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-                    </svg>
-                </button>
-                <h1 class="text-2xl font-bold text-teal-800 ml-4">Administración</h1>
-            </header>
-            
-            <div class="bg-white rounded-lg shadow-md p-6 space-y-4 mb-6">
-                <h2 class="text-xl font-semibold text-gray-700">Estado de Conexión</h2>
-                <p class="text-gray-600">Estado de la conexión a la base de datos compartida.</p>
-                <input type="text" id="connection-status-display" readonly class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 text-sm break-words" value="No conectado">
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6 space-y-4">
-                <h2 class="text-xl font-semibold text-gray-700">Exportar Datos</h2>
-                <p class="text-gray-600">Exporta un archivo CSV con los datos principales de todos los pacientes (no incluye el historial de consultas).</p>
-                <button id="btn-export-csv" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow hover:bg-green-700 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mr-2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 8.25H7.5a2.25 2.25 0 0 0-2.25 2.25v9a2.25 2.25 0 0 0 2.25 2.25h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25H15M9 12l3 3m0 0 3-3m-3 3V2.25" />
-                    </svg>
-                    Exportar a CSV
-                </button>
-            </div>
-        </div>
-
-    </div> <!-- Fin de #app -->
-    
-    <!-- ===== MODALES ===== -->
-    <div id="modal-overlay"></div>
-    
-    <!-- Modal de Alerta -->
-    <div id="modal-alert" class="modal-box">
-        <p id="modal-alert-message" class="text-gray-700 mb-6"></p>
-        <button id="modal-alert-ok" class="w-full bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700">Entendido</button>
-    </div>
-    
-    <!-- Modal de Confirmación -->
-    <div id="modal-confirm" class="modal-box">
-        <p id="modal-confirm-message" class="text-gray-700 mb-6"></p>
-        <div class="flex gap-4">
-            <button id="modal-confirm-cancel" class="w-1/2 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
-            <button id="modal-confirm-ok" class="w-1/2 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Confirmar</button>
-        </div>
-    </div>
-    
-    <!-- Modal de Prompt -->
-    <div id="modal-prompt" class="modal-box">
-        <p id="modal-prompt-message" class="text-gray-700 mb-4"></p>
-        <input type="text" id="modal-prompt-input" class="w-full p-2 border border-gray-300 rounded-lg mb-6">
-        <div class="flex gap-4">
-            <button id="modal-prompt-cancel" class="w-1/2 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Cancelar</button>
-            <button id="modal-prompt-ok" class="w-1/2 bg-teal-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-700">Aceptar</button>
-        </div>
-    </div>
-
-    <!-- Scripts de Firebase -->
-    <script type="module">
-        // Importar funciones de Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Variables globales de Firebase
-        let app;
-        let auth;
-        let db;
-
-        /**
-         * Lógica principal de la aplicación
-         */
-        const App = {
-            // Estado de la aplicación
-            state: {
-                db: {
-                    patients: {}, // Almacena pacientes por ID
-                    consults: {}, // Almacena consultas por patientId
-                    options: { // Opciones para menús desplegables
-                        cobertura: ['Particular', 'IOMA', 'Otras'],
-                        lugar: ['Caseros', 'Alsina', 'Hospital'],
-                        antecedentes: ['Prematurez', 'Bajo peso al nacer', 'Ictericia', 'Bronquiolitis', 'Neumonia'],
-                        motivo: ['Control de salud', 'Control pre escolar', 'Control de patologia aguda', 'Otras']
-                    }
-                },
-                currentPatientId: null, // ID del paciente que se está viendo
-                currentConsultId: null, // ID de la consulta que se está editando (no implementado aún)
-                isDataLoaded: false, // Flag para saber si los datos de FB se cargaron
-                userId: null, // ID de usuario anónimo
-            },
-
-            // ===== 1. INICIALIZACIÓN =====
-            
-            init() {
-                console.log("Iniciando aplicación...");
-                this.initFirebase();
-                this.addEventListeners();
-            },
-            
-            initFirebase() {
-                try {
-                    // Configuración de Firebase (inyectada por el entorno)
-                    // const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                    
-                    // TU CONFIGURACIÓN DE FIREBASE (Ya está pegada aquí)
-                    const firebaseConfig = {
-                      apiKey: "AIzaSyD7qqOK2Rqj9-PFpPgYuSM-xQXc8GBCNi0",
-                      authDomain: "consultoriopediatria-961aa.firebaseapp.com",
-                      projectId: "consultoriopediatria-961aa",
-                      storageBucket: "consultoriopediatria-961aa.firebasestorage.app",
-                      messagingSenderId: "573582470827",
-                      appId: "1:573582470827:web:50553186ad07b125a111ee",
-                      measurementId: "G-FGEK8CB3ZY"
-                    };
-
-                    
-                    app = initializeApp(firebaseConfig);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
-                    
-                    // Habilitar logs de Firestore para depuración
-                    setLogLevel('Debug');
-                    
-                    // Escuchar cambios en la autenticación
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            // Usuario autenticado
-                            console.log("Usuario autenticado (Anónimo):", user.uid);
-                            this.state.userId = user.uid; // Lo guardamos por si lo necesitamos, pero no para la ruta
-                            // Ahora que tenemos un usuario, cargamos sus datos
-                            this.loadDataFromFirestore();
-                        } else {
-                            // No hay usuario, intentar iniciar sesión
-                            this.signIn();
-                        }
-                    });
-                } catch (e) {
-                    console.error("Error inicializando Firebase:", e);
-                    this.showModal('alert', 'Error crítico al conectar con la base de datos.');
-                }
-            },
-            
-            async signIn() {
-                try {
-                    // Como no estamos en la plataforma, forzamos el inicio anónimo siempre
-                    console.log("Iniciando sesión anónimamente...");
-                    await signInAnonymously(auth);
-                    // onAuthStateChanged se encargará del resto
-                } catch (e) {
-                    console.error("Error al iniciar sesión anónimamente:", e);
-                    this.showModal('alert', 'Error de autenticación. Verifique su conexión y las reglas de Firebase.');
-                }
-            },
-
-            // ===== 2. MANEJO DE DATOS (FIRESTORE) =====
-            
-            loadDataFromFirestore() {
-                // if (!this.state.userId) return; // Ya no dependemos del userId para la ruta
-                
-                // Forzamos 'default-app-id' para que la ruta sea consistente
-                // en Canvas y en Netlify.
-                const appId = 'default-app-id';
-                // ESTA ES LA RUTA PÚBLICA (COMPARTIDA)
-                const docRef = doc(db, `artifacts/${appId}/public/data/pediatria`, 'mainDB');
-                
-                console.log("Intentando escuchar en la ruta:", docRef.path); // <-- LÍNEA AGREGADA PARA DEBUG
-                
-                // onSnapshot escucha cambios en tiempo real
-                onSnapshot(docRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        console.log("Datos recibidos de Firestore:", docSnap.data());
-                        const data = docSnap.data();
-                        // Fusionar datos de FB con el estado local, FB tiene prioridad
-                        this.state.db.patients = data.patients || {};
-                        this.state.db.consults = data.consults || {};
-                        // Asegurarnos de que las opciones base siempre existan
-                        this.state.db.options = {
-                            ...this.state.db.options,
-                            ...data.options,
-                        };
-                    } else {
-                        console.log("No existe el documento en Firestore. Se creará uno nuevo al guardar.");
-                        // No hay datos, pero la app está "cargada"
-                    }
-                    this.state.isDataLoaded = true;
-                    // Ocultar "Cargando" y mostrar la lista de pacientes
-                    this.navigate('page-list'); 
-                    this.renderPatientList();
-                }, (error) => {
-                    console.error("Error al escuchar datos de Firestore:", error);
-                    this.showModal('alert', 'Error al cargar los datos. Intente recargar la página.');
-                });
-            },
-
-            async saveDB() {
-                // if (!this.state.userId || !this.state.isDataLoaded) { // Ya no es relevante el UserID para guardar
-                if (!this.state.isDataLoaded) {
-                    console.warn("Intento de guardado sin datos cargados. Cancelado.");
-                    return;
-                }
-                
-                // Forzamos 'default-app-id' para que la ruta sea consistente
-                // en Canvas y en Netlify.
-                const appId = 'default-app-id';
-                // ESTA ES LA RUTA PÚBLICA (COMPARTIDA)
-                const docRef = doc(db, `artifacts/${appId}/public/data/pediatria`, 'mainDB');
-                
-                console.log("Intentando guardar en la ruta:", docRef.path); // <-- LÍNEA AGREGADA PARA DEBUG
-                
-                try {
-                    // Guardamos una copia limpia del estado
-                    const dataToSave = JSON.parse(JSON.stringify(this.state.db));
-                    await setDoc(docRef, dataToSave);
-                    console.log("Datos guardados exitosamente.");
-                } catch (e) {
-                    console.error("Error al guardar en Firestore:", e);
-                    this.showModal('alert', `Error al guardar: ${e.message}`);
-                }
-            },
-
-            // ===== 3. NAVEGACIÓN Y RENDERIZADO =====
-            
-            navigate(pageId, patientId = null) {
-                // No navegar si los datos no están listos, excepto a la pág. de "Cargando"
-                if (!this.state.isDataLoaded && pageId !== 'page-loading') {
-                    console.warn(`Navegación a ${pageId} bloqueada: los datos no están cargados.`);
-                    return;
-                }
-                
-                console.log(`Navegando a: ${pageId} (Paciente: ${patientId})`);
-
-                // Ocultar todas las páginas
-                document.querySelectorAll('.page').forEach(page => {
-                    page.classList.remove('active');
-                });
-                
-                // Si se provee un ID de paciente, guardarlo en el estado
-                if (patientId) {
-                    this.state.currentPatientId = patientId;
-                }
-
-                // Mostrar la página solicitada
-                const targetPage = document.getElementById(pageId);
-                if (targetPage) {
-                    targetPage.classList.add('active');
-                } else {
-                    console.error(`Página no encontrada: ${pageId}`);
-                    document.getElementById('page-list').classList.add('active'); // Fallback
-                    return;
-                }
-
-                // Lógica específica para cada página
-                switch(pageId) {
-                    case 'page-list':
-                        this.state.currentPatientId = null;
-                        this.renderPatientList();
-                        document.getElementById('search-patient').value = '';
-                        break;
-                    case 'page-patient-detail':
-                        if (this.state.currentPatientId) {
-                            this.renderPatientDetail();
-                            this.renderConsultHistory();
-                        } else {
-                            console.error("No se puede mostrar el detalle: currentPatientId es nulo.");
-                            this.navigate('page-list'); // Volver a la lista
-                        }
-                        break;
-                    case 'page-patient-form':
-                        this.renderPatientForm(this.state.currentPatientId);
-                        break;
-                    case 'page-consult-form':
-                        this.renderConsultForm();
-                        break;
-                    case 'page-admin':
-                        // Renderizado especial para la pág. de admin
-                        document.getElementById('connection-status-display').value = this.state.userId ? 'Conectado (Anónimo)' : 'No conectado';
-                        break;
-                }
-            },
-
-            renderPatientList() {
-                const container = document.getElementById('patient-list-container');
-                if (!container) return;
-
-                const searchTerm = document.getElementById('search-patient').value.toLowerCase();
-                const patients = Object.values(this.state.db.patients);
-                
-                // Ordenar pacientes alfabéticamente
-                patients.sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-                let filteredPatients = patients;
-                if (searchTerm) {
-                    filteredPatients = patients.filter(p => 
-                        p.nombre.toLowerCase().includes(searchTerm) ||
-                        p.madre.toLowerCase().includes(searchTerm)
-                    );
-                }
-
-                if (filteredPatients.length === 0) {
-                    container.innerHTML = `<p class="text-gray-500 text-center">No se encontraron pacientes.</p>`;
-                    return;
-                }
-
-                container.innerHTML = filteredPatients.map(p => {
-                    const edad = this.utils.calculateAge(p.dob);
-                    const proximaConsulta = p.proximaConsulta ? `Próx: ${this.utils.formatDate(p.proximaConsulta, 'short')}` : '';
-                    
-                    return `
-                        <div class="bg-white rounded-lg shadow p-4 mb-3 flex items-center justify-between cursor-pointer hover:shadow-md" data-patient-id="${p.id}">
-                            <div>
-                                <h2 class="text-lg font-semibold text-teal-700">${p.nombre}</h2>
-                                <p class="text-gray-600 text-sm">${edad}</p>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-sm text-gray-500">${proximaConsulta}</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-400 inline-block">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                                </svg>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-                
-                // Añadir event listeners a los items de la lista
-                container.querySelectorAll('.cursor-pointer').forEach(item => {
-                    item.addEventListener('click', () => {
-                        this.navigate('page-patient-detail', item.dataset.patientId);
-                    });
-                });
-            },
-            
-            renderPatientDetail() {
-                const id = this.state.currentPatientId;
-                const p = this.state.db.patients[id];
-                if (!p) {
-                    this.showModal('alert', 'Error: No se encontró el paciente.');
-                    this.navigate('page-list');
-                    return;
-                }
-
-                document.getElementById('detail-nombre').textContent = p.nombre;
-                document.getElementById('detail-edad').textContent = this.utils.calculateAge(p.dob);
-                document.getElementById('detail-dob').textContent = this.utils.formatDate(p.dob, 'long');
-                document.getElementById('detail-madre').textContent = p.madre || '-';
-                document.getElementById('detail-telefono').textContent = p.telefono || '-';
-                document.getElementById('detail-cobertura').textContent = p.cobertura || '-';
-                document.getElementById('detail-lugar').textContent = p.lugar || '-';
-                document.getElementById('detail-peso-nacer').textContent = p.pesoNacer ? `${p.pesoNacer} grs` : '-';
-                document.getElementById('detail-eg').textContent = p.eg ? `${p.eg} sem` : '-';
-                document.getElementById('detail-notas').textContent = p.notas || '-';
-                
-                // Próxima consulta
-                document.getElementById('detail-proxima-consulta').textContent = p.proximaConsulta 
-                    ? this.utils.formatDate(p.proximaConsulta, 'full') 
-                    : 'No programada';
-                
-                // Pendientes
-                const pendientesContainer = document.getElementById('detail-pendientes');
-                if (p.pendientes) {
-                    pendientesContainer.textContent = p.pendientes;
-                    pendientesContainer.parentElement.classList.remove('hidden');
-                } else {
-                    pendientesContainer.textContent = 'No hay pendientes.';
-                    // Opcional: ocultar la sección si no hay pendientes
-                    // pendientesContainer.parentElement.classList.add('hidden');
-                }
-                
-                // Antecedentes (como etiquetas)
-                const anteContainer = document.getElementById('detail-antecedentes');
-                anteContainer.innerHTML = '';
-                if (p.antecedentes && p.antecedentes.length > 0) {
-                    p.antecedentes.forEach(ant => {
-                        const tag = document.createElement('span');
-                        tag.className = 'bg-gray-200 text-gray-700 text-sm font-medium px-3 py-1 rounded-full';
-                        tag.textContent = ant;
-                        anteContainer.appendChild(tag);
-                    });
-                } else {
-                    anteContainer.innerHTML = '<span class="text-gray-500">-</span>';
-                }
-            },
-            
-            renderPatientForm(patientId = null) {
-                // Cargar menús desplegables
-                this.renderSelect('cobertura', this.state.db.options.cobertura, true);
-                this.renderSelect('lugar', this.state.db.options.lugar, true);
-                // Renderizar el multiselect personalizado
-                this.renderCustomMultiSelect('antecedentes', this.state.db.options.antecedentes, true);
-                
-                const form = document.getElementById('form-patient');
-                form.reset(); // Limpiar el formulario
-
-                if (patientId) {
-                    // Editar paciente
-                    document.getElementById('patient-form-title').textContent = 'Editar Paciente';
-                    const p = this.state.db.patients[patientId];
-                    if (!p) {
-                        this.showModal('alert', 'Error al cargar datos para editar.');
-                        this.navigate('page-patient-detail');
-                        return;
-                    }
-                    
-                    document.getElementById('patient-id').value = p.id;
-                    document.getElementById('nombre').value = p.nombre;
-                    document.getElementById('madre').value = p.madre || '';
-                    document.getElementById('telefono').value = p.telefono || '';
-                    document.getElementById('dob').value = p.dob;
-                    document.getElementById('cobertura').value = p.cobertura || '';
-                    document.getElementById('peso-nacer').value = p.pesoNacer || '';
-                    document.getElementById('eg').value = p.eg || '';
-                    document.getElementById('lugar').value = p.lugar || '';
-                    document.getElementById('notas').value = p.notas || '';
-                    
-                    // Cargar antecedentes en el multiselect
-                    this.updateCustomMultiSelect(p.antecedentes || []);
-
-                } else {
-                    // Nuevo paciente
-                    document.getElementById('patient-form-title').textContent = 'Nuevo Paciente';
-                    document.getElementById('patient-id').value = '';
-                    this.updateCustomMultiSelect([]); // Asegurarse de que esté vacío
-                }
-            },
-            
-            renderConsultForm(consultId = null) {
-                // (Por ahora solo soporta NUEVA consulta)
-                this.state.currentConsultId = null; 
-                const patientId = this.state.currentPatientId;
-                const patient = this.state.db.patients[patientId];
-                if (!patient) {
-                    this.showModal('alert', 'Error: Paciente no encontrado.');
-                    this.navigate('page-patient-detail');
-                    return;
-                }
-                
-                document.getElementById('consult-patient-name').textContent = `Para: ${patient.nombre}`;
-                
-                // Cargar menú de motivo
-                this.renderSelect('consult-motivo', this.state.db.options.motivo, true);
-                
-                const form = document.getElementById('form-consult');
-                form.reset();
-                
-                // Setear fecha actual
-                document.getElementById('consult-fecha').value = this.utils.getTodayDate();
-                
-                // Cargar pendientes viejos
-                const pendientesViejosDiv = document.getElementById('consult-pendientes-viejos');
-                const pendientesBtn = document.getElementById('btn-resolve-pendientes');
-                
-                if (patient.pendientes) {
-                    pendientesViejosDiv.textContent = patient.pendientes;
-                    pendientesViejosDiv.parentElement.classList.remove('hidden');
-                    pendientesBtn.classList.remove('hidden');
-                    pendientesViejosDiv.classList.remove('line-through', 'text-gray-400', 'bg-green-50');
-                    pendientesBtn.textContent = "Marcar como resueltos";
-                } else {
-                    pendientesViejosDiv.parentElement.classList.add('hidden');
-                }
-                
-                // Setear próxima consulta (si ya hay una programada)
-                document.getElementById('consult-proxima').value = patient.proximaConsulta || '';
-            },
-            
-            renderConsultHistory() {
-                const container = document.getElementById('consult-history-container');
-                const patientId = this.state.currentPatientId;
-                const consults = (this.state.db.consults[patientId] || [])
-                                  .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // Más nuevas primero
-
-                if (consults.length === 0) {
-                    container.innerHTML = '<p class="text-gray-500 text-center">No hay consultas registradas.</p>';
-                    return;
-                }
-                
-                container.innerHTML = consults.map(c => {
-                    return `
-                        <div class="bg-white rounded-lg shadow p-4">
-                            <h4 class="font-bold text-lg text-teal-700">${this.utils.formatDate(c.fecha, 'full')}</h4>
-                            <p class="font-semibold text-gray-600 mb-2">${c.motivo}</p>
-                            <div class="grid grid-cols-3 gap-2 text-sm mb-3">
-                                <span><strong>Peso:</strong> ${c.peso || '-'} kg</span>
-                                <span><strong>Talla:</strong> ${c.talla || '-'} cm</span>
-                                <span><strong>PC:</strong> ${c.pc || '-'} cm</span>
-                            </div>
-                            <div class="text-sm mb-3">
-                                <strong>Vacunas:</strong> ${c.vacunas || '-'}
-                            </div>
-                            <details class="text-sm">
-                                <summary class="cursor-pointer font-medium text-gray-600">Ver Notas y Pendientes</summary>
-                                <div class="mt-2 p-3 bg-gray-50 rounded">
-                                    <h5 class="font-semibold">Notas de la Consulta:</h5>
-                                    <p class="whitespace-pre-wrap mb-2">${c.notas || 'Sin notas.'}</p>
-                                    <h5 class="font-semibold text-red-600">Pendientes generados:</h5>
-                                    <p class="whitespace-pre-wrap text-red-700">${c.pendientesNuevos || 'Ninguno.'}</p>
-                                </div>
-                            </details>
-                        </div>
-                    `;
-                }).join('');
-            },
-
-            // ===== 4. MANEJO DE FORMULARIOS (GUARDAR) =====
-            
-            handleSavePatient(e) {
-                e.preventDefault();
-                console.log("Intentando guardar paciente...");
-                
-                const id = document.getElementById('patient-id').value;
-                const patientId = id || this.utils.generateId();
-                
-                // Leer antecedentes del multiselect personalizado
-                const selectedAntecedentes = [];
-                document.querySelectorAll('#antecedentes-options-list input[type="checkbox"]:checked').forEach(cb => {
-                    selectedAntecedentes.push(cb.value);
-                });
-
-                const patientData = {
-                    id: patientId,
-                    nombre: document.getElementById('nombre').value,
-                    madre: document.getElementById('madre').value || '',
-                    telefono: document.getElementById('telefono').value || '',
-                    dob: document.getElementById('dob').value,
-                    cobertura: document.getElementById('cobertura').value || '',
-                    pesoNacer: document.getElementById('peso-nacer').value || '',
-                    eg: document.getElementById('eg').value || '',
-                    lugar: document.getElementById('lugar').value || '',
-                    antecedentes: selectedAntecedentes,
-                    notas: document.getElementById('notas').value || '',
-                    // Mantener los pendientes y prox. consulta si ya existían (al editar)
-                    pendientes: this.state.db.patients[patientId]?.pendientes || '',
-                    proximaConsulta: this.state.db.patients[patientId]?.proximaConsulta || ''
-                };
-                
-                if (!patientData.nombre || !patientData.dob) {
-                    this.showModal('alert', 'Nombre y Fecha de Nacimiento son obligatorios.');
-                    return;
-                }
-
-                // Guardar en el estado local
-                this.state.db.patients[patientId] = patientData;
-                
-                // Guardar en Firestore
-                this.saveDB(); 
-                
-                // Navegar al detalle del paciente
-                this.navigate('page-patient-detail', patientId);
-            },
-            
-            handleSaveConsult(e) {
-                e.preventDefault();
-                console.log("Intentando guardar consulta...");
-                
-                const patientId = this.state.currentPatientId;
-                if (!patientId) return;
-
-                const consultId = this.utils.generateId(); // Siempre nueva consulta
-                const fecha = document.getElementById('consult-fecha').value;
-                
-                const consultData = {
-                    id: consultId,
-                    patientId: patientId,
-                    fecha: fecha,
-                    motivo: document.getElementById('consult-motivo').value || '',
-                    peso: document.getElementById('consult-peso').value || '',
-                    talla: document.getElementById('consult-talla').value || '',
-                    pc: document.getElementById('consult-pc').value || '',
-                    vacunas: document.querySelector('input[name="vacunas"]:checked')?.value || '',
-                    notas: document.getElementById('consult-notas').value || '',
-                    pendientesNuevos: document.getElementById('consult-pendientes-nuevos').value || '',
-                };
-
-                // Actualizar datos del paciente
-                const patient = this.state.db.patients[patientId];
-                
-                // 1. Manejar pendientes viejos
-                const pendientesViejosDiv = document.getElementById('consult-pendientes-viejos');
-                if (pendientesViejosDiv.classList.contains('line-through')) {
-                    // Si están tachados (resueltos), los borramos del paciente
-                    patient.pendientes = '';
-                }
-                
-                // 2. Sobreescribir pendientes del paciente con los nuevos
-                patient.pendientes = consultData.pendientesNuevos || patient.pendientes; // Mantiene el viejo si el nuevo está vacío y no fue resuelto
-
-                // 3. Actualizar próxima consulta
-                patient.proximaConsulta = document.getElementById('consult-proxima').value || '';
-                
-                // Guardar la consulta en el estado local
-                if (!this.state.db.consults[patientId]) {
-                    this.state.db.consults[patientId] = [];
-                }
-                this.state.db.consults[patientId].push(consultData);
-                
-                // Guardar todo en Firestore
-                this.saveDB();
-                
-                // Navegar de vuelta al detalle
-                this.navigate('page-patient-detail', patientId);
-            },
-
-            // ===== 5. EVENT LISTENERS =====
-            
-            addEventListeners() {
-                console.log("Añadiendo event listeners...");
-                
-                // Navegación (Botones "Atrás" y "Cancelar")
-                document.body.addEventListener('click', (e) => {
-                    const backBtn = e.target.closest('.btn-back, .btn-cancel');
-                    if (backBtn && backBtn.dataset.target) {
-                        e.preventDefault();
-                        const targetPage = backBtn.dataset.target === 'page-patient-detail' ? 'page-patient-detail' : 'page-list';
-                        this.navigate(targetPage);
-                    }
-                });
-                
-                // Botón: Ir a Admin
-                document.getElementById('btn-admin-nav')?.addEventListener('click', () => this.navigate('page-admin'));
-                
-                // Botón: Nuevo Paciente (desde lista)
-                document.getElementById('btn-add-patient-nav')?.addEventListener('click', () => {
-                    this.state.currentPatientId = null; // Limpiar ID
-                    this.navigate('page-patient-form');
-                });
-                
-                // Botón: Editar Paciente (desde detalle)
-                document.getElementById('btn-edit-patient')?.addEventListener('click', () => this.navigate('page-patient-form')); // El ID ya está en el estado
-
-                // Botón: Nueva Consulta (desde detalle)
-                document.getElementById('btn-new-consult')?.addEventListener('click', () => this.navigate('page-consult-form'));
-
-                // Formularios
-                document.getElementById('form-patient')?.addEventListener('submit', (e) => this.handleSavePatient(e));
-                document.getElementById('form-consult')?.addEventListener('submit', (e) => this.handleSaveConsult(e));
-                
-                // Búsqueda
-                document.getElementById('search-patient')?.addEventListener('input', () => this.renderPatientList());
-
-                // Botón: Resolver Pendientes (en form-consult)
-                document.getElementById('btn-resolve-pendientes')?.addEventListener('click', (e) => {
-                    const div = document.getElementById('consult-pendientes-viejos');
-                    div.classList.toggle('line-through');
-                    div.classList.toggle('text-gray-400');
-                    div.classList.toggle('bg-green-50');
-                    e.target.textContent = div.classList.contains('line-through') ? 'Marcar como NO resueltos' : 'Marcar como resueltos';
-                });
-                
-                // Exportar CSV
-                document.getElementById('btn-export-csv')?.addEventListener('click', () => this.exportCSV());
-                
-                // ===== Listeners Modales =====
-                this.addModalListeners();
-                
-                // ===== Listeners Menús Desplegables Dinámicos =====
-                this.addSelectListeners();
-
-                // ===== Listeners Menú Multiselect Personalizado =====
-                this.addCustomMultiSelectListeners();
-            },
-            
-            // ===== 6. LÓGICA DE COMPONENTES (Modales, Selects) =====
-            
-            // --- Menús desplegables (Selects) ---
-            
-            renderSelect(id, options, allowNew) {
-                const select = document.getElementById(id);
-                if (!select) return;
-                
-                const currentValue = select.value; // Guardar valor actual si existe
-                select.innerHTML = ''; // Limpiar
-                
-                options.forEach(opt => {
-                    select.add(new Option(opt, opt));
-                });
-                
-                if (allowNew) {
-                    select.add(new Option('+ Agregar nuevo...', 'addNew'));
-                }
-                
-                select.value = currentValue; // Restaurar valor
-            },
-            
-            addSelectListeners() {
-                // Manejar la opción "Agregar nuevo..." en CUALQUIER select
-                document.body.addEventListener('change', (e) => {
-                    if (e.target.tagName === 'SELECT' && e.target.value === 'addNew') {
-                        const select = e.target;
-                        const optionKey = select.id.replace('consult-', ''); // 'cobertura', 'lugar', 'motivo'
-                        
-                        this.showModal('prompt', `Agregar nueva opción para "${optionKey}":`, async (newValue) => {
-                            if (newValue && !this.state.db.options[optionKey].includes(newValue)) {
-                                this.state.db.options[optionKey].push(newValue);
-                                // Re-renderizar este select
-                                this.renderSelect(select.id, this.state.db.options[optionKey], true);
-                                select.value = newValue; // Seleccionar el nuevo valor
-                                this.saveDB(); // Guardar las nuevas opciones
-                            } else {
-                                select.value = ''; // Resetear al prompt
-                            }
-                        }, () => {
-                            select.value = ''; // Resetear si cancela
-                        });
-                    }
-                });
-            },
-
-            // --- Menú Multiselect Personalizado (Antecedentes) ---
-            
-            renderCustomMultiSelect(key, options, allowNew) {
-                const list = document.getElementById(`${key}-options-list`);
-                if (!list) return;
-                
-                list.innerHTML = ''; // Limpiar lista
-                
-                options.forEach(opt => {
-                    const li = document.createElement('li');
-                    li.className = 'p-2 border-b border-gray-100 hover:bg-gray-50';
-                    li.innerHTML = `
-                        <label class="flex items-center w-full cursor-pointer">
-                            <input type="checkbox" value="${opt}" class="mr-3 text-teal-600 focus:ring-teal-500 rounded">
-                            <span class="text-gray-700">${opt}</span>
-                        </label>
-                    `;
-                    list.appendChild(li);
-                });
-                
-                if (allowNew) {
-                    const li = document.createElement('li');
-                    li.className = 'p-2 text-center text-teal-600 font-medium cursor-pointer hover:bg-teal-50';
-                    li.id = 'btn-add-new-antecedente';
-                    li.textContent = '+ Agregar nuevo...';
-                    list.appendChild(li);
-                }
-            },
-            
-            updateCustomMultiSelect(selectedValues) {
-                const list = document.getElementById('antecedentes-options-list');
-                if (!list) return;
-                
-                // Desmarcar todos
-                list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = false;
-                });
-                
-                // Marcar los seleccionados
-                selectedValues.forEach(val => {
-                    const cb = list.querySelector(`input[value="${val}"]`);
-                    if (cb) {
-                        cb.checked = true;
-                    }
-                });
-                
-                this.updateAntecedentesTriggerText();
-            },
-            
-            toggleAntecedentesDropdown(forceState = null) {
-                const dropdown = document.getElementById('antecedentes-dropdown');
-                if (!dropdown) return;
-
-                const show = forceState !== null ? forceState : dropdown.classList.contains('hidden');
-                
-                if (show) {
-                    dropdown.classList.remove('hidden');
-                } else {
-                    dropdown.classList.add('hidden');
-                }
-            },
-            
-            updateAntecedentesTriggerText() {
-                const triggerText = document.getElementById('antecedentes-trigger-text');
-                if (!triggerText) return;
-                
-                const checked = document.querySelectorAll('#antecedentes-options-list input[type="checkbox"]:checked');
-                
-                if (checked.length === 0) {
-                    triggerText.textContent = 'Seleccione...';
-                    triggerText.classList.add('text-gray-500');
-                } else if (checked.length <= 2) {
-                    triggerText.textContent = Array.from(checked).map(cb => cb.value).join(', ');
-                    triggerText.classList.remove('text-gray-500');
-                } else {
-                    triggerText.textContent = `${checked.length} seleccionados`;
-                    triggerText.classList.remove('text-gray-500');
-                }
-            },
-            
-            addCustomMultiSelectListeners() {
-                const trigger = document.getElementById('antecedentes-trigger');
-                const dropdown = document.getElementById('antecedentes-dropdown');
-                
-                // Abrir/cerrar dropdown
-                trigger?.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleAntecedentesDropdown();
-                });
-                
-                // Cerrar al hacer clic afuera
-                document.addEventListener('click', (e) => {
-                    if (trigger && !trigger.contains(e.target) && dropdown && !dropdown.contains(e.target)) {
-                        this.toggleAntecedentesDropdown(false);
-                    }
-                });
-
-                // Actualizar texto al marcar/desmarcar
-                dropdown?.addEventListener('change', (e) => {
-                    if (e.target.type === 'checkbox') {
-                        this.updateAntecedentesTriggerText();
-                    }
-                });
-                
-                // Botón "+ Agregar nuevo..."
-                dropdown?.addEventListener('click', (e) => {
-                    if (e.target.id === 'btn-add-new-antecedente') {
-                        this.handleAddNewAntecedente();
-                    }
-                });
-            },
-            
-            handleAddNewAntecedente() {
-                this.showModal('prompt', 'Nuevo antecedente:', async (newValue) => {
-                    if (newValue && !this.state.db.options.antecedentes.includes(newValue)) {
-                        this.state.db.options.antecedentes.push(newValue);
-                        // Re-renderizar el multiselect
-                        this.renderCustomMultiSelect('antecedentes', this.state.db.options.antecedentes, true);
-                        
-                        // Marcar automáticamente el nuevo valor
-                        const cb = document.querySelector(`#antecedentes-options-list input[value="${newValue}"]`);
-                        if (cb) cb.checked = true;
-                        
-                        this.updateAntecedentesTriggerText();
-                        this.saveDB(); // Guardar nuevas opciones
-                    }
-                });
-            },
-
-            // --- Modales (Alert, Confirm, Prompt) ---
-            
-            showModal(type, message, onOk = null, onCancel = null) {
-                // Ocultar todos por si acaso
-                document.getElementById('modal-alert').classList.remove('active');
-                document.getElementById('modal-confirm').classList.remove('active');
-                document.getElementById('modal-prompt').classList.remove('active');
-                
-                const overlay = document.getElementById('modal-overlay');
-                const modalId = `modal-${type}`;
-                const modal = document.getElementById(modalId);
-                const msgEl = document.getElementById(`${modalId}-message`);
-
-                if (!modal || !msgEl || !overlay) {
-                    console.error(`Modal ${type} no encontrado`);
-                    return;
-                }
-                
-                msgEl.textContent = message;
-                
-                // Callbacks (re-asignar cada vez que se abre)
-                this.modalOkCallback = onOk;
-                this.modalCancelCallback = onCancel;
-                
-                if (type === 'prompt') {
-                    document.getElementById('modal-prompt-input').value = '';
-                }
-
-                modal.classList.add('active');
-                overlay.classList.add('active');
-                
-                if (type === 'prompt') {
-                    document.getElementById('modal-prompt-input').focus();
-                }
-            },
-            
-            hideModal() {
-                document.getElementById('modal-overlay').classList.remove('active');
-                document.getElementById('modal-alert').classList.remove('active');
-                document.getElementById('modal-confirm').classList.remove('active');
-                document.getElementById('modal-prompt').classList.remove('active');
-                
-                // Limpiar callbacks
-                this.modalOkCallback = null;
-                this.modalCancelCallback = null;
-            },
-            
-            addModalListeners() {
-                // Botones OK
-                document.getElementById('modal-alert-ok')?.addEventListener('click', () => {
-                    if (this.modalOkCallback) this.modalOkCallback();
-                    this.hideModal();
-                });
-                document.getElementById('modal-confirm-ok')?.addEventListener('click', () => {
-                    if (this.modalOkCallback) this.modalOkCallback();
-                    this.hideModal();
-                });
-                document.getElementById('modal-prompt-ok')?.addEventListener('click', () => {
-                    const input = document.getElementById('modal-prompt-input').value;
-                    if (this.modalOkCallback) this.modalOkCallback(input);
-                    this.hideModal();
-                });
-                
-                // Botones CANCEL
-                document.getElementById('modal-confirm-cancel')?.addEventListener('click', () => {
-                    if (this.modalCancelCallback) this.modalCancelCallback();
-                    this.hideModal();
-                });
-                document.getElementById('modal-prompt-cancel')?.addEventListener('click', () => {
-                    if (this.modalCancelCallback) this.modalCancelCallback();
-                    this.hideModal();
-                });
-            },
-            
-            // ===== 7. UTILIDADES =====
-            
-            exportCSV() {
-                let csvContent = "data:text/csv;charset=utf-8,";
-                const headers = [
-                    "ID", "Nombre", "Fec. Nacimiento", "Edad (Meses)", "Madre", "Telefono",
-                    "Cobertura", "Lugar", "Peso Nacer (grs)", "EG (sem)", "Antecedentes", "Notas"
-                ];
-                csvContent += headers.join(",") + "\r\n";
-
-                const patients = Object.values(this.state.db.patients);
-
-                patients.forEach(p => {
-                    const edadMeses = this.utils.calculateAge(p.dob, 'months');
-                    const antecedentes = (p.antecedentes || []).join('; '); // Unir con ;
-                    
-                    const row = [
-                        p.id,
-                        `"${p.nombre}"`, // Encomillar por si hay comas
-                        p.dob,
-                        edadMeses,
-                        `"${p.madre || ''}"`,
-                        `"${p.telefono || ''}"`,
-                        `"${p.cobertura || ''}"`,
-                        `"${p.lugar || ''}"`,
-                        p.pesoNacer || '',
-                        p.eg || '',
-                        `"${antecedentes}"`,
-                        `"${(p.notas || '').replace(/"/g, '""')}"` // Escapar comillas dobles
-                    ];
-                    csvContent += row.join(",") + "\r\n";
-                });
-
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `pacientes_pediatria_${this.utils.getTodayDate()}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            },
-            
-            utils: {
-                generateId() {
-                    return Date.now().toString(36) + Math.random().toString(36).substring(2, 9);
-                },
-                getTodayDate() {
-                    return new Date().toISOString().split('T')[0];
-                },
-                formatDate(dateStr, format = 'long') {
-                    if (!dateStr) return '';
-                    try {
-                        const date = new Date(dateStr + 'T00:00:00'); // Asumir zona horaria local
-                        if (format === 'short') {
-                            return date.toLocaleDateString('es-AR'); // Ej: 31/10/2024
-                        }
-                        if (format === 'full') {
-                             return date.toLocaleDateString('es-AR', {
-                                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                            }); // Ej: jueves, 31 de octubre de 2024
-                        }
-                        // Default 'long'
-                        return date.toLocaleDateString('es-AR', {
-                            year: 'numeric', month: 'long', day: 'numeric'
-                        }); // Ej: 31 de octubre de 2024
-                    } catch(e) {
-                        console.error("Error al formatear fecha:", e, dateStr);
-                        return dateStr;
-                    }
-                },
-                calculateAge(dob, unit = 'auto') {
-                    if (!dob) return '';
-                    try {
-                        const birthDate = new Date(dob);
-                        const today = new Date();
-                        
-                        let years = today.getFullYear() - birthDate.getFullYear();
-                        let months = today.getMonth() - birthDate.getMonth();
-                        let days = today.getDate() - birthDate.getDate();
-
-                        if (days < 0) {
-                            months--;
-                            days += new Date(today.getFullYear(), today.getMonth(), 0).getDate();
-                        }
-                        if (months < 0) {
-                            years--;
-                            months += 12;
-                        }
-
-                        const totalMonths = (years * 12) + months;
-                        
-                        if (unit === 'months') return totalMonths;
-
-                        // Lógica 'auto'
-                        if (years > 1) {
-                            return `${years} años${months > 0 ? ` y ${months} mes${months > 1 ? 'es' : ''}` : ''}`;
-                        }
-                        if (totalMonths > 0) {
-                            return `${totalMonths} mes${totalMonths > 1 ? 'es' : ''}${days > 0 ? ` y ${days} día${days > 1 ? 's' : ''}` : ''}`;
-                        }
-                        return `${days} día${days > 1 ? 's' : ''}`;
-                    } catch(e) {
-                        console.error("Error calculando edad:", e, dob);
-                        return 'N/A';
+    <!-- Configuración de color suave para el tema verde -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'soft-green': '#A7F3D0', // Verde menta suave para botones/títulos
+                        'dark-green': '#065F46', // Verde oscuro para texto
+                        'background-light': '#F9FAFB', // Fondo muy claro
+                        'primary': '#059669', // Verde primario para foco
+                        'accent': '#10B981', // Verde acentuado
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
                     }
                 }
             }
-        };
+        }
+    </script>
+    <style>
+        /* Estilos personalizados para el fondo claro y la fuente */
+        body {
+            background-color: theme('colors.background-light');
+            font-family: theme('fontFamily.sans');
+            color: theme('colors.dark-green');
+        }
+        /* Clase para el color de los elementos de acción/título */
+        .header-title, .action-button, .nav-item {
+            background-color: theme('colors.soft-green');
+            color: theme('colors.dark-green');
+            font-weight: 600;
+        }
+        .action-button:hover, .nav-item:hover {
+            background-color: theme('colors.primary');
+            color: white;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .appointment-item {
+            background-color: #ECFDF5;
+            border-left: 4px solid theme('colors.primary');
+        }
+        .schedule-info-box {
+            background-color: theme('colors.soft-green'); 
+            border-left: 4px solid theme('colors.primary');
+        }
+        .btn-edit { background-color: #FCD34D; color: #854D0E; }
+        .btn-edit:hover { background-color: #FBBF24; color: #78350F; }
+        .btn-share { background-color: #3B82F6; color: white; }
+        .btn-share:hover { background-color: #2563EB; }
 
-        // Iniciar la aplicación cuando el DOM esté listo
-        document.addEventListener('DOMContentLoaded', () => {
-            App.init();
+    </style>
+    <!-- Firebase SDKs para la persistencia de datos (Firestore) y autenticación -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- CONSTANTES Y VARIABLES GLOBALES (incluyendo Firebase) ---
+        
+        // Variables globales provistas por el entorno (MANDATORIAS)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inicialización de Firebase
+        setLogLevel('debug');
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Referencias a colecciones públicas (para datos compartidos)
+        const getClinicsRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'clinics');
+        const getAppointmentsRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'appointments');
+
+        // Días de la semana: 0=Domingo, 1=Lunes, ..., 6=Sábado
+        const DAY_NAMES_FULL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const WORK_DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+
+        let clinics = [];        
+        let appointments = [];   
+        let currentClinicId = null; 
+        let currentViewDate = new Date(); 
+        let userId = null;
+        let isAuthReady = false;
+
+        // Referencias a elementos del DOM (Auth)
+        const authStatusEl = document.getElementById('auth-status');
+        const userIdDisplayEl = document.getElementById('user-id-display');
+        const loadingEl = document.getElementById('loading-message');
+        const clinicSelectEl = document.getElementById('clinic-select');
+        const contentAreaEl = document.getElementById('content-area');
+
+
+        // --- AUTENTICACIÓN Y SETUP INICIAL ---
+
+        async function authenticateUser() {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Error durante la autenticación:", error);
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                authStatusEl.textContent = 'Estado: Conectado (Gestión)';
+                userIdDisplayEl.textContent = `ID de Usuario: ${userId}`;
+                isAuthReady = true;
+                
+                setupFirestoreListeners();
+            } else {
+                authStatusEl.textContent = 'Estado: Desconectado';
+                userIdDisplayEl.textContent = 'ID de Usuario: (Anónimo)';
+                isAuthReady = true; // Permite que la app cargue (las vistas públicas funcionarán)
+                
+                // Si la autenticación falla, aún necesitamos cargar los datos para las vistas públicas
+                setupFirestoreListeners(); 
+            }
+            loadingEl.classList.add('hidden');
         });
 
+        // Llamar a autenticar al cargar
+        authenticateUser();
+
+        // --- LISTENERS DE FIRESTORE (REEMPLAZANDO LOCAL STORAGE) ---
+
+        function setupFirestoreListeners() {
+            // 1. Escuchar Consultorios (Clinics)
+            onSnapshot(getClinicsRef(), (snapshot) => {
+                clinics = snapshot.docs.map(doc => ({ 
+                    id: doc.id, 
+                    ...doc.data(),
+                    appointmentDuration: doc.data().appointmentDuration || 30 // Asegurar duración
+                }));
+                
+                if (clinics.length === 0) {
+                    showView('manage-clinics');
+                } else {
+                    if (!currentClinicId || !clinics.some(c => c.id === currentClinicId)) {
+                        currentClinicId = clinics[0].id;
+                    }
+                    renderClinicSelector();
+                    renderCurrentView(); 
+                }
+            }, (error) => {
+                console.error("Error al escuchar consultorios:", error);
+            });
+
+            // 2. Escuchar Turnos (Appointments)
+            onSnapshot(getAppointmentsRef(), (snapshot) => {
+                appointments = snapshot.docs.map(doc => ({ 
+                    id: doc.id, 
+                    ...doc.data(),
+                    dateTime: doc.data().dateTime.toDate() 
+                }));
+                
+                const now = new Date();
+                appointments = appointments.filter(app => app.dateTime >= now);
+                appointments.sort((a, b) => a.dateTime - b.dateTime);
+                
+                renderCurrentView(); 
+            }, (error) => {
+                console.error("Error al escuchar turnos:", error);
+            });
+        }
+
+        // --- UTILIDADES ---
+
+        function generateId() {
+            // En Firestore, el ID es generado por addDoc, pero esta función se mantiene para el modo de edición de arrays
+            return Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
+
+        function showMessage(text, isError = false) {
+            const messageEl = document.getElementById('feedback-message');
+            messageEl.textContent = text;
+            messageEl.classList.remove('hidden', 'bg-red-100', 'bg-soft-green');
+            messageEl.classList.add(isError ? 'bg-red-100' : 'bg-soft-green');
+            messageEl.classList.remove('border-red-500', 'border-primary');
+            if(isError) messageEl.classList.add('border-red-500'); else messageEl.classList.add('border-primary');
+            
+            setTimeout(() => {
+                messageEl.classList.add('hidden');
+            }, 5000); 
+        }
+
+        /**
+         * Copia el texto al portapapeles.
+         */
+        function copyTextToClipboard(text) {
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = text;
+            tempTextArea.style.position = 'fixed'; 
+            tempTextArea.style.left = '-9999px'; 
+            document.body.appendChild(tempTextArea);
+            tempTextArea.focus();
+            tempTextArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                return successful;
+            } catch (err) {
+                return false;
+            } finally {
+                document.body.removeChild(tempTextArea);
+            }
+        }
+
+        /** Formatea una fecha a 'DD/MM/YYYY' */
+        function formatDate(date) {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+        
+        /** Formatea una fecha a 'YYYY-MM-DD' para input type="date" */
+        function formatInputDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        /** Formatea una hora a 'HH:MM' */
+        function formatTime(date) {
+            return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+        
+        /** Convierte una hora HH:MM a minutos totales desde la medianoche */
+        function getTimeInMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        /** Verifica si una fecha es un día de atención para el consultorio */
+        function isClinicDayActive(clinic, date) {
+            const dayIndex = date.getDay();
+            
+            if (dayIndex === 0 || dayIndex === 6) {
+                return false;
+            }
+            
+            const daySchedule = clinic.schedule?.[dayIndex];
+            return daySchedule?.active === true;
+        }
+
+        /** Obtiene el próximo día activo (incluyendo hoy) para el consultorio */
+        function getNextActiveDay(clinicId, startDate, direction = 1) {
+            const clinic = clinics.find(c => c.id === clinicId);
+            if (!clinic) return startDate;
+
+            const maxDaysCheck = 365;
+            let checkDate = new Date(startDate);
+            checkDate.setHours(0, 0, 0, 0);
+
+            if (direction !== 0 && !isClinicDayActive(clinic, checkDate)) {
+                 checkDate.setDate(checkDate.getDate() + direction);
+            }
+            
+            for (let i = 0; i < maxDaysCheck; i++) {
+                if (isClinicDayActive(clinic, checkDate)) {
+                    return checkDate;
+                }
+                checkDate.setDate(checkDate.getDate() + direction);
+            }
+            
+            return startDate; 
+        }
+
+        /** Calcula el próximo slot disponible para la fecha dada (HH:MM o 'No disponible') */
+        function calculateNextAvailableSlot(clinic, date) {
+            const dayIndex = date.getDay();
+            const daySchedule = clinic.schedule?.[dayIndex];
+            const duration = clinic.appointmentDuration;
+
+            if (!isClinicDayActive(clinic, date)) {
+                return null;
+            }
+
+            const startMinutes = getTimeInMinutes(daySchedule.start);
+            const endMinutes = getTimeInMinutes(daySchedule.end);
+            
+            const occupiedSlots = appointments
+                .filter(a => a.clinicId === clinic.id)
+                .filter(a => formatDate(a.dateTime) === formatDate(date))
+                .map(a => getTimeInMinutes(formatTime(a.dateTime)));
+
+            let searchStartMinutes = startMinutes;
+            const now = new Date();
+            
+            if (formatDate(date) === formatDate(now)) {
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                
+                let currentRoundedMinutes = Math.ceil((nowMinutes - startMinutes) / duration) * duration + startMinutes;
+                
+                if (currentRoundedMinutes < nowMinutes) {
+                    currentRoundedMinutes += duration;
+                }
+                
+                searchStartMinutes = Math.max(startMinutes, currentRoundedMinutes);
+            }
+
+            for (let currentSlotMinutes = searchStartMinutes; 
+                 currentSlotMinutes + duration <= endMinutes; 
+                 currentSlotMinutes += duration) {
+                
+                if (!occupiedSlots.includes(currentSlotMinutes)) {
+                    const hour = Math.floor(currentSlotMinutes / 60).toString().padStart(2, '0');
+                    const minute = (currentSlotMinutes % 60).toString().padStart(2, '0');
+                    return `${hour}:${minute}`;
+                }
+            }
+
+            return 'No disponible'; 
+        }
+
+        /** Obtiene un array de todos los slots disponibles para una fecha */
+        function getAvailableSlots(clinic, date) {
+            const dayIndex = date.getDay();
+            const daySchedule = clinic.schedule?.[dayIndex];
+            const duration = clinic.appointmentDuration;
+            const slots = [];
+
+            if (!isClinicDayActive(clinic, date)) {
+                return slots;
+            }
+
+            const startMinutes = getTimeInMinutes(daySchedule.start);
+            const endMinutes = getTimeInMinutes(daySchedule.end);
+            
+            const occupiedSlots = appointments
+                .filter(a => a.clinicId === clinic.id)
+                .filter(a => formatDate(a.dateTime) === formatDate(date))
+                .map(a => getTimeInMinutes(formatTime(a.dateTime)));
+
+            let searchStartMinutes = startMinutes;
+            const now = new Date();
+            
+            if (formatDate(date) === formatDate(now)) {
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                let currentRoundedMinutes = Math.ceil((nowMinutes - startMinutes) / duration) * duration + startMinutes;
+                if (currentRoundedMinutes < nowMinutes) {
+                    currentRoundedMinutes += duration;
+                }
+                searchStartMinutes = Math.max(startMinutes, currentRoundedMinutes);
+            }
+
+            for (let currentSlotMinutes = searchStartMinutes; 
+                 currentSlotMinutes + duration <= endMinutes; 
+                 currentSlotMinutes += duration) {
+                
+                if (!occupiedSlots.includes(currentSlotMinutes)) {
+                    const hour = Math.floor(currentSlotMinutes / 60).toString().padStart(2, '0');
+                    const minute = (currentSlotMinutes % 60).toString().padStart(2, '0');
+                    slots.push(`${hour}:${minute}`);
+                }
+            }
+
+            return slots; 
+        }
+        
+        // --- NAVEGACIÓN Y VISTAS ---
+
+        window.showView = function(viewName) {
+            document.querySelectorAll('.nav-item').forEach(el => {
+                el.classList.remove('bg-primary', 'text-white');
+                el.classList.add('bg-soft-green', 'text-dark-green');
+            });
+            
+            const navEl = document.querySelector(`.nav-item[onclick*="${viewName}"]`);
+            if (navEl) {
+                navEl.classList.remove('bg-soft-green', 'text-dark-green');
+                navEl.classList.add('bg-primary', 'text-white');
+            }
+
+            // Lógica de vista (re)inicial
+            if (viewName === 'schedule' && currentClinicId) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                currentViewDate = getNextActiveDay(currentClinicId, today, 1);
+            } else if (viewName === 'public-booking' && clinics.length > 0) {
+                 // Inicializa la vista pública con el primer consultorio
+                 const clinicId = clinics[0].id;
+                 const today = new Date();
+                 const nextActiveDay = getNextActiveDay(clinicId, today, 1); 
+                 renderPublicBookingView(clinicId, nextActiveDay);
+                 return; // Evita el renderCurrentView final
+            }
+
+            renderCurrentView(viewName);
+        }
+
+        function renderCurrentView(viewNameOverride = null) {
+            const clinicSelectorContainer = document.getElementById('clinic-selector-container');
+            
+            let viewName = viewNameOverride || (document.querySelector('.nav-item.bg-primary') ? document.querySelector('.nav-item.bg-primary').getAttribute('onclick').match(/showView\('(.*?)'\)/)[1] : 'manage-clinics');
+
+            const isManagementView = viewName !== 'manage-clinics' && viewName !== 'public-booking';
+            clinicSelectorContainer.classList.toggle('hidden', viewName === 'manage-clinics' || viewName === 'public-booking');
+            
+            if (viewName !== 'manage-clinics' && clinics.length === 0) {
+                contentAreaEl.innerHTML = `<div class="p-8 text-center text-xl">Aún no tienes consultorios definidos. Por favor, ve a "Gestión de Consultorios" para empezar.</div>`;
+                return;
+            }
+
+            switch (viewName) {
+                case 'schedule':
+                    renderScheduleView();
+                    break;
+                case 'appointments':
+                    renderAppointmentsView();
+                    break;
+                case 'manage-clinics':
+                    renderManageClinicsView();
+                    break;
+                case 'public-booking':
+                    // Debe ser llamado con el ID y fecha, si no, usa un default
+                    if (clinics.length > 0) {
+                        const today = new Date();
+                        const nextActiveDay = getNextActiveDay(clinics[0].id, today, 1);
+                        renderPublicBookingView(clinics[0].id, nextActiveDay);
+                    }
+                    break;
+            }
+        }
+        
+        // --- RENDERIZADO DEL SELECTOR DE CONSULTORIOS ---
+
+        function renderClinicSelector() {
+            const clinicSelectEl = document.getElementById('clinic-select');
+            // ... (Lógica de renderClinicSelector idéntica a v17, usando currentClinicId)
+            clinicSelectEl.innerHTML = '';
+            
+            if (clinics.length === 0) {
+                clinicSelectEl.innerHTML = '<option value="">Sin Consultorios</option>';
+                clinicSelectEl.disabled = true;
+                currentClinicId = null;
+                return;
+            }
+            
+            clinicSelectEl.disabled = false;
+            
+            if (!currentClinicId || !clinics.some(c => c.id === currentClinicId)) {
+                currentClinicId = clinics.length > 0 ? clinics[0].id : null;
+            }
+
+            clinics.forEach(clinic => {
+                const option = document.createElement('option');
+                option.value = clinic.id;
+                option.textContent = clinic.name;
+                clinicSelectEl.appendChild(option);
+            });
+
+            clinicSelectEl.value = currentClinicId;
+
+            clinicSelectEl.onchange = (e) => {
+                currentClinicId = e.target.value;
+                if (document.querySelector('.nav-item.bg-primary')?.textContent.includes('Agenda')) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    currentViewDate = getNextActiveDay(currentClinicId, today, 1); 
+                }
+                renderCurrentView();
+            };
+        }
+        
+        // --- VISTA: GESTIÓN DE CONSULTORIOS (Actualizada para usar Firestore) ---
+
+        function renderClinicsList() {
+            const clinicsListEl = document.getElementById('clinics-list');
+            // ... (Lógica de renderClinicsList idéntica a v17)
+            if (!clinicsListEl) return;
+
+            let listHtml = `
+                <h3 class="text-xl font-semibold mb-4">Consultorios Definidos (${clinics.length})</h3>
+                ${clinics.length === 0 ? '<p class="text-gray-500">No hay consultorios definidos aún.</p>' : ''}
+                ${clinics.map(clinic => `
+                    <div class="card bg-white p-4 rounded-xl flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-lg">${clinic.name}</h4>
+                            <p class="text-sm text-gray-700 font-medium mb-2">Duración Consulta: ${clinic.appointmentDuration} min</p>
+                            <ul class="text-sm text-gray-600 mt-1 space-y-1">
+                                ${WORK_DAY_NAMES.map((dayName, index) => {
+                                    const scheduleIndex = index + 1;
+                                    const schedule = clinic.schedule?.[scheduleIndex]; 
+                                    if (schedule && schedule.active) {
+                                        return `<li>${dayName}: ${schedule.start} - ${schedule.end}</li>`;
+                                    }
+                                    return '';
+                                }).join('') || '<li class="text-red-500">Sin horario definido.</li>'}
+                            </ul>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="editClinic('${clinic.id}')" class="text-blue-500 hover:text-blue-700 font-medium">Editar</button>
+                            <button onclick="deleteClinic('${clinic.id}', '${clinic.name}')" class="text-red-500 hover:text-red-700 font-medium">Eliminar</button>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            clinicsListEl.innerHTML = listHtml;
+        }
+
+        function renderManageClinicsView() {
+            // ... (Contenedor HTML idéntico a v17)
+             contentAreaEl.innerHTML = `
+                <div class="p-4 md:p-8">
+                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Gestión de Consultorios</h2>
+                    
+                    <!-- Formulario para Agregar/Editar Consultorio -->
+                    <div id="clinic-form-container" class="card p-6 bg-white rounded-xl mb-8">
+                        <h3 class="text-xl font-semibold mb-4">Añadir Nuevo Consultorio</h3>
+                        <form id="clinic-form">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="mb-4">
+                                    <label for="clinic-name" class="block text-sm font-medium text-gray-700">Nombre del Consultorio</label>
+                                    <input type="text" id="clinic-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="appointment-duration" class="block text-sm font-medium text-gray-700">Duración de la Consulta (minutos)</label>
+                                    <input type="number" id="appointment-duration" required min="5" step="5" value="30" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                </div>
+                            </div>
+
+                            <h4 class="font-medium mt-6 mb-3">Horario de Atención (Lunes a Viernes):</h4>
+                            <div id="schedule-inputs" class="space-y-3">
+                                <!-- Se llenará con JavaScript en setupClinicForm -->
+                            </div>
+                            
+                            <button type="submit" class="action-button mt-6 px-4 py-2 rounded-lg" id="submit-clinic-btn">
+                                Guardar Consultorio
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Lista de Consultorios Existentes (Contenedor) -->
+                    <div class="space-y-4" id="clinics-list">
+                        <!-- Se llenará con renderClinicsList -->
+                    </div>
+                </div>
+            `;
+            
+            setupClinicForm();
+            renderClinicsList();
+        }
+
+        function setupClinicForm(clinicToEdit = null) {
+            // ... (Llenado de formulario idéntico a v17)
+            const form = document.getElementById('clinic-form');
+            const nameInput = document.getElementById('clinic-name');
+            const durationInput = document.getElementById('appointment-duration');
+            const scheduleInputsContainer = document.getElementById('schedule-inputs');
+            const submitBtn = document.getElementById('submit-clinic-btn');
+            
+            if (!form || !nameInput || !scheduleInputsContainer || !submitBtn || !durationInput) return; 
+
+            // Llenar inputs de horarios (solo Lunes a Viernes)
+            scheduleInputsContainer.innerHTML = WORK_DAY_NAMES.map((dayName, index) => {
+                const dayIndex = index + 1; // 1=Lunes, 5=Viernes
+                const scheduleData = clinicToEdit && clinicToEdit.schedule?.[dayIndex];
+
+                return `
+                    <div class="flex items-center space-x-3 bg-gray-50 p-3 rounded-md">
+                        <input type="checkbox" id="day-${dayIndex}-active" name="day-${dayIndex}-active" 
+                            class="h-4 w-4 text-primary rounded border-gray-300"
+                            ${scheduleData?.active ? 'checked' : ''}
+                        >
+                        <label for="day-${dayIndex}-active" class="flex-grow font-medium text-dark-green w-20">${dayName}</label>
+                        <input type="time" id="day-${dayIndex}-start" name="day-${dayIndex}-start" value="${scheduleData?.start || '09:00'}" required class="p-1 border rounded w-full">
+                        <span class="text-gray-500">-</span>
+                        <input type="time" id="day-${dayIndex}-end" name="day-${dayIndex}-end" value="${scheduleData?.end || '17:00'}" required class="p-1 border rounded w-full">
+                    </div>
+                `;
+            }).join('');
+
+            // Llenar campos si estamos en modo edición
+            if (clinicToEdit) {
+                nameInput.value = clinicToEdit.name;
+                durationInput.value = clinicToEdit.appointmentDuration || 30;
+                document.getElementById('clinic-form-container').querySelector('h3').textContent = 'Editar Consultorio: ' + clinicToEdit.name;
+                submitBtn.textContent = 'Actualizar Consultorio';
+            } else {
+                nameInput.value = ''; 
+                durationInput.value = 30; 
+                document.getElementById('clinic-form-container').querySelector('h3').textContent = 'Añadir Nuevo Consultorio';
+                submitBtn.textContent = 'Guardar Consultorio';
+            }
+
+            // Manejo del envío del formulario (ACTUALIZADO PARA FIRESTORE)
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+
+                try {
+                    const name = nameInput.value.trim();
+                    const appointmentDuration = parseInt(durationInput.value, 10);
+
+                    if (!name) return showMessage("El nombre del consultorio es obligatorio.", true);
+                    if (isNaN(appointmentDuration) || appointmentDuration <= 0) return showMessage("La duración de la consulta debe ser un número positivo (mínimo 5 minutos).", true);
+
+                    const newSchedule = Array(7).fill({ active: false, start: '00:00', end: '00:00' }); 
+                    for (let i = 1; i <= 5; i++) {
+                        const active = document.getElementById(`day-${i}-active`).checked;
+                        const start = document.getElementById(`day-${i}-start`).value;
+                        const end = document.getElementById(`day-${i}-end`).value;
+                        newSchedule[i] = { active, start, end };
+                    }
+                    
+                    const clinicData = {
+                        name: name,
+                        appointmentDuration: appointmentDuration,
+                        schedule: newSchedule,
+                    };
+
+                    if (clinicToEdit) {
+                        // ACTUALIZACIÓN EN FIRESTORE
+                        await updateDoc(doc(getClinicsRef(), clinicToEdit.id), clinicData);
+                        showMessage(`Consultorio "${name}" actualizado con éxito.`);
+                    } else {
+                        // CREACIÓN EN FIRESTORE
+                        const docRef = await addDoc(getClinicsRef(), {
+                            ...clinicData,
+                            createdAt: new Date(),
+                            createdBy: userId,
+                        });
+                        currentClinicId = docRef.id;
+                        showMessage(`Consultorio "${name}" añadido con éxito.`);
+                        form.reset();
+                    }
+                    
+                    setupClinicForm(null); // Vuelve al modo "Añadir"
+                    
+                } catch (error) {
+                    console.error("Error al procesar el formulario del consultorio:", error);
+                    showMessage("Error al guardar el consultorio. Revisa la consola.", true);
+                }
+            };
+        }
+
+        window.editClinic = function(clinicId) {
+            const clinic = clinics.find(c => c.id === clinicId);
+            if (clinic) {
+                document.getElementById('clinic-form-container').scrollIntoView({ behavior: 'smooth' });
+                setupClinicForm(clinic);
+            }
+        }
+
+        window.deleteClinic = async function(clinicId, clinicName) {
+            if (!window.confirm(`¿Estás seguro de que quieres eliminar el consultorio "${clinicName}"?`)) {
+                return;
+            }
+
+            try {
+                await deleteDoc(doc(getClinicsRef(), clinicId));
+                showMessage(`Consultorio "${clinicName}" eliminado.`);
+            } catch (error) {
+                console.error("Error al eliminar consultorio:", error);
+                showMessage("Error al eliminar el consultorio. Revisa la consola.", true);
+            }
+        }
+
+        // --- LÓGICA DE EDICIÓN Y COMPARTIR TURNOS (Idéntica a v17, usando Firestore) ---
+
+        window.editAppointment = function(appointmentId) {
+            // ... (Idéntica a v17)
+            const appointment = appointments.find(a => a.id === appointmentId);
+            if (!appointment) return showMessage("Turno no encontrado.", true);
+
+            showView('appointments');
+            
+            setTimeout(() => {
+                const formTitle = document.getElementById('form-title');
+                const submitBtn = document.getElementById('submit-appointment-btn');
+                const appointmentDateInput = document.getElementById('appointment-date');
+
+                document.getElementById('appointment-id-hidden').value = appointment.id;
+                document.getElementById('patient-name').value = appointment.patientName;
+                document.getElementById('patient-phone').value = appointment.patientPhone;
+                appointmentDateInput.value = formatInputDate(appointment.dateTime);
+                document.getElementById('appointment-time').value = formatTime(appointment.dateTime);
+                document.getElementById('notes').value = appointment.notes;
+
+                if (formTitle) formTitle.textContent = 'Editar Turno Existente';
+                if (submitBtn) submitBtn.textContent = 'Actualizar Turno';
+                
+                if (appointmentDateInput) appointmentDateInput.dispatchEvent(new Event('change'));
+
+                document.getElementById('new-appointment-form-container').scrollIntoView({ behavior: 'smooth' });
+
+            }, 50); 
+        }
+
+        function resetAppointmentForm() {
+            // ... (Idéntica a v17)
+            const form = document.getElementById('appointment-form');
+            const formTitle = document.getElementById('form-title');
+            const submitBtn = document.getElementById('submit-appointment-btn');
+            const appointmentDateInput = document.getElementById('appointment-date');
+            
+            if (form) form.reset();
+            
+            document.getElementById('appointment-id-hidden').value = '';
+            
+            if (formTitle) formTitle.textContent = 'Añadir Nuevo Turno';
+            if (submitBtn) submitBtn.textContent = 'Confirmar Turno';
+            
+            if (currentClinicId) {
+                const clinic = clinics.find(c => c.id === currentClinicId);
+                const today = new Date();
+                const nextActiveDay = getNextActiveDay(currentClinicId, today, 1);
+                
+                appointmentDateInput.value = formatInputDate(nextActiveDay);
+                appointmentDateInput.dispatchEvent(new Event('change'));
+            }
+        }
+
+        window.shareAppointment = function(appointmentId) {
+            // ... (Idéntica a v17)
+            const appt = appointments.find(a => a.id === appointmentId);
+            const clinic = clinics.find(c => c.id === appt.clinicId);
+            if (!appt || !clinic) return showMessage("Turno no encontrado.", true);
+
+            const text = `
+                Turno Confirmado
+                Consultorio: ${clinic.name}
+                Paciente: ${appt.patientName}
+                Teléfono: ${appt.patientPhone}
+                Fecha: ${formatDate(appt.dateTime)}
+                Hora: ${formatTime(appt.dateTime)}
+                ${appt.notes ? `Notas: ${appt.notes}` : ''}
+            `.trim();
+
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Turno Confirmado',
+                    text: text,
+                }).catch(error => {
+                    handleShareFallback(text);
+                });
+            } else {
+                handleShareFallback(text);
+            }
+        }
+        
+        function handleShareFallback(text) {
+             const copiedSuccessfully = copyTextToClipboard(text);
+             if (copiedSuccessfully) {
+                 showMessage('✅ Detalles del turno COPIADOS al portapapeles. ¡Ya puedes pegarlos donde quieras!', false);
+             } else {
+                 showMessage('⚠️ Error al intentar copiar. Por favor, intente seleccionar y copiar el texto manualmente.', true);
+             }
+        }
+
+        // --- VISTA: AGENDAR NUEVO TURNO (Uso Médico) ---
+
+        function renderAppointmentsView() {
+            // ... (Contenido HTML idéntico a v17, se reutiliza el mismo formulario)
+            const selectedClinic = clinics.find(c => c.id === currentClinicId);
+            if (!selectedClinic) {
+                contentAreaEl.innerHTML = `<p class="p-8 text-center">Seleccione un consultorio para agendar un turno.</p>`;
+                return;
+            }
+
+            const today = new Date();
+            const nextActiveDay = getNextActiveDay(currentClinicId, today, 1); 
+            const defaultDate = formatInputDate(nextActiveDay);
+
+            const dayInfoHtml = getDayScheduleInfoHtml(selectedClinic, nextActiveDay);
+            
+            contentAreaEl.innerHTML = `
+                <div class="p-4 md:p-8">
+                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Gestión de Turnos (Uso Médico)</h2>
+                    
+                    <div id="new-appointment-form-container" class="card p-6 bg-white rounded-xl mb-8">
+                        <h3 class="text-xl font-semibold mb-4" id="form-title">Añadir Nuevo Turno</h3>
+                        
+                        <div id="schedule-info-display" class="mb-4 p-3 rounded-lg schedule-info-box">
+                            ${dayInfoHtml}
+                        </div>
+                        
+                        <form id="appointment-form">
+                            <!-- Campo oculto para manejar el ID en modo edición -->
+                            <input type="hidden" id="appointment-id-hidden" value=""> 
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="patient-name" class="block text-sm font-medium text-gray-700">Nombre del Paciente</label>
+                                    <input type="text" id="patient-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                </div>
+                                <div>
+                                    <label for="patient-phone" class="block text-sm font-medium text-gray-700">Teléfono del Paciente</label>
+                                    <input type="tel" id="patient-phone" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                </div>
+                                <div>
+                                    <label for="appointment-date" class="block text-sm font-medium text-gray-700">Fecha</label>
+                                    <input type="date" id="appointment-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border" value="${defaultDate}">
+                                </div>
+                                <div>
+                                    <label for="appointment-time" class="block text-sm font-medium text-gray-700">Hora</label>
+                                    <input type="time" id="appointment-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label for="notes" class="block text-sm font-medium text-gray-700">Notas</label>
+                                    <textarea id="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border"></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center mt-6">
+                                <button type="submit" id="submit-appointment-btn" class="action-button px-4 py-2 rounded-lg">
+                                    Confirmar Turno
+                                </button>
+                                <button type="button" onclick="resetAppointmentForm()" class="text-sm text-red-500 hover:text-red-700 font-medium">Cancelar Edición / Nuevo Turno</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <h3 class="text-xl font-semibold mb-4 text-dark-green">Próximos Turnos Agendados para ${selectedClinic.name}</h3>
+                    <div id="current-appointments-list" class="space-y-3">
+                        ${renderAppointmentsList(currentClinicId)}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('appointment-form').onsubmit = handleAppointmentSubmit;
+            
+            document.getElementById('appointment-date').addEventListener('change', (e) => {
+                const newDateStr = e.target.value;
+                const [year, month, day] = newDateStr.split('-').map(Number);
+                const newDate = new Date(year, month - 1, day);
+                newDate.setHours(0, 0, 0, 0);
+
+                const clinic = clinics.find(c => c.id === currentClinicId);
+                const nextActiveDay = getNextActiveDay(currentClinicId, today, 1);
+
+                if (!isClinicDayActive(clinic, newDate)) {
+                    e.target.value = defaultDate;
+                    
+                    showMessage(`Error: El consultorio está CERRADO el ${DAY_NAMES_FULL[newDate.getDay()]}, ${formatDate(newDate)}. Seleccione un día activo.`, true);
+
+                    const updatedInfo = getDayScheduleInfoHtml(clinic, nextActiveDay);
+                    document.getElementById('schedule-info-display').innerHTML = updatedInfo;
+                    return;
+                }
+
+                const updatedInfo = getDayScheduleInfoHtml(clinic, newDate);
+                document.getElementById('schedule-info-display').innerHTML = updatedInfo;
+            });
+        }
+
+        /** Maneja el envío del formulario de turno (ACTUALIZADO PARA FIRESTORE) */
+        async function handleAppointmentSubmit(e) {
+            e.preventDefault();
+            
+            const appointmentId = document.getElementById('appointment-id-hidden').value; 
+            const isEditing = !!appointmentId;
+
+            const patientName = document.getElementById('patient-name').value.trim();
+            const patientPhone = document.getElementById('patient-phone').value.trim();
+            const dateStr = document.getElementById('appointment-date').value;
+            const timeStr = document.getElementById('appointment-time').value;
+            const notes = document.getElementById('notes').value.trim();
+
+            if (!patientName || !patientPhone || !dateStr || !timeStr || !currentClinicId) {
+                return showMessage("Todos los campos (incluyendo el Teléfono) son obligatorios.", true);
+            }
+
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const [hour, minute] = timeStr.split(':').map(Number);
+            const localDateTime = new Date(year, month - 1, day, hour, minute);
+
+            if (isNaN(localDateTime.getTime())) {
+                return showMessage("Fecha u hora inválida.", true);
+            }
+            
+            const selectedClinic = clinics.find(c => c.id === currentClinicId);
+            const durationMinutes = selectedClinic.appointmentDuration;
+            const dayIndex = localDateTime.getDay();
+            const isWorkingDay = isClinicDayActive(selectedClinic, localDateTime);
+            
+            if (!isWorkingDay) {
+                 const dayName = DAY_NAMES_FULL[dayIndex];
+                 return showMessage(`Error: El consultorio "${selectedClinic.name}" está CERRADO el ${dayName}, ${formatDate(localDateTime)}.`, true);
+            }
+            
+            const daySchedule = selectedClinic.schedule[dayIndex];
+            const reqMinutes = getTimeInMinutes(timeStr);
+            const startMinutes = getTimeInMinutes(daySchedule.start);
+            const endMinutes = getTimeInMinutes(daySchedule.end);
+
+            const appointmentEndTimeMinutes = reqMinutes + durationMinutes;
+            if (reqMinutes < startMinutes || appointmentEndTimeMinutes > endMinutes) {
+                return showMessage(`Error de horario: El turno de ${timeStr} está FUERA del horario de atención del consultorio: ${daySchedule.start} a ${daySchedule.end} (la consulta dura ${durationMinutes} min).`, true);
+            }
+            
+            const timeSinceStart = reqMinutes - startMinutes;
+            if (timeSinceStart % durationMinutes !== 0) {
+                 return showMessage(`Error de intervalo: El turno debe ser en una fracción de ${durationMinutes} minutos a partir de ${daySchedule.start}.`, true);
+            }
+
+            const appointmentsForDay = appointments
+                .filter(a => a.clinicId === currentClinicId)
+                .filter(a => formatDate(a.dateTime) === formatDate(localDateTime))
+                .filter(a => a.id !== appointmentId); 
+                
+            const isSlotOccupied = appointmentsForDay.some(a => getTimeInMinutes(formatTime(a.dateTime)) === reqMinutes);
+            
+            if (isSlotOccupied) {
+                return showMessage(`Error: El turno de ${timeStr} ya está OCUPADO para el ${formatDate(localDateTime)}.`, true);
+            }
+            
+            // PREPARAR DATOS PARA FIRESTORE
+            const newAppointmentData = {
+                clinicId: currentClinicId,
+                patientName,
+                patientPhone, 
+                dateTime: localDateTime, // Firestore lo convertirá a Timestamp
+                notes,
+                bookedBy: isEditing ? 'Médico (Editado)' : 'Médico',
+            };
+
+            try {
+                if (isEditing) {
+                    // ACTUALIZAR EN FIRESTORE
+                    await updateDoc(doc(getAppointmentsRef(), appointmentId), newAppointmentData);
+                    showMessage(`Turno de ${patientName} actualizado con éxito.`);
+                    resetAppointmentForm(); 
+                } else {
+                    // CREAR EN FIRESTORE
+                    await addDoc(getAppointmentsRef(), newAppointmentData);
+                    showMessage(`Turno para ${patientName} a las ${timeStr} agendado con éxito.`);
+                    document.getElementById('appointment-form').reset();
+                    resetAppointmentForm(); 
+                }
+            } catch (error) {
+                console.error("Error al guardar turno:", error);
+                showMessage("Error al guardar el turno. Revisa la consola.", true);
+            }
+        }
+        
+        function renderAppointmentsList(clinicId) {
+             // ... (Lógica de renderAppointmentsList idéntica a v17, pero con datos de Firestore)
+             const now = new Date();
+            const filteredAppointments = appointments
+                .filter(a => a.clinicId === clinicId)
+                .filter(a => a.dateTime >= now); 
+
+            if (filteredAppointments.length === 0) {
+                return `<p class="text-gray-500">No hay turnos futuros agendados para este consultorio.</p>`;
+            }
+
+            return filteredAppointments.map(app => `
+                <div class="appointment-item p-3 rounded-lg flex justify-between items-start text-dark-green">
+                    <div>
+                        <p class="font-bold text-base">${app.patientName} ${app.bookedBy === 'Online' ? '<span class="text-xs font-semibold bg-accent text-white px-1 rounded">WEB</span>' : ''}</p>
+                        <p class="text-sm text-gray-700">
+                            <span class="font-semibold">${formatTime(app.dateTime)}</span> (${formatDate(app.dateTime)}) | ${app.patientPhone}
+                        </p>
+                        ${app.notes ? `<p class="text-xs italic mt-1">${app.notes.substring(0, 50)}...</p>` : ''}
+                    </div>
+                    <div class="flex flex-col space-y-1">
+                        <button onclick="editAppointment('${app.id}')" class="btn-edit text-xs px-2 py-1 rounded-md font-semibold transition-colors">
+                            Editar
+                        </button>
+                        <button onclick="shareAppointment('${app.id}')" class="btn-share text-xs px-2 py-1 rounded-md font-semibold transition-colors">
+                            Compartir
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- VISTA: TURNOS ONLINE (PÚBLICO) ---
+
+        function renderPublicBookingView(initialClinicId, initialDate) {
+            const contentAreaEl = document.getElementById('content-area');
+            const selectedClinic = clinics.find(c => c.id === initialClinicId);
+            
+            if (!selectedClinic) {
+                 contentAreaEl.innerHTML = `<p class="p-8 text-center text-red-500">No hay consultorios disponibles para la reserva online.</p>`;
+                 return;
+            }
+
+            const defaultDate = formatInputDate(initialDate);
+
+            contentAreaEl.innerHTML = `
+                <div class="p-4 md:p-8">
+                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Reserva de Turnos Online</h2>
+                    
+                    <div class="card p-6 bg-white rounded-xl mb-8 max-w-2xl mx-auto">
+                        <h3 class="text-xl font-semibold mb-4 text-primary">Selecciona tu Cita</h3>
+                        
+                        <!-- Selectores de Consultorio y Fecha -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div>
+                                <label for="booking-clinic-select" class="block text-sm font-medium text-gray-700">Consultorio</label>
+                                <select id="booking-clinic-select" class="mt-1 block w-full p-2 border rounded-md shadow-sm">
+                                    ${clinics.map(c => `<option value="${c.id}" ${c.id === initialClinicId ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="booking-date" class="block text-sm font-medium text-gray-700">Fecha de la Cita</label>
+                                <input type="date" id="booking-date" required class="mt-1 block w-full p-2 border rounded-md shadow-sm" value="${defaultDate}" min="${defaultDate}">
+                            </div>
+                        </div>
+
+                        <!-- Slots Disponibles -->
+                        <h4 class="font-medium mt-6 mb-3 border-t pt-3">Horarios Disponibles para <span id="slots-date-display">${formatDate(initialDate)}</span>:</h4>
+                        <div id="available-slots-container" class="flex flex-wrap gap-2 min-h-20 bg-gray-50 p-3 rounded-md">
+                            <!-- Slots se cargarán aquí -->
+                            <p class="text-gray-500 w-full" id="slots-message">Cargando disponibilidad...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Formulario de Reserva (Oculto hasta seleccionar slot) -->
+                    <div id="booking-form-container" class="card p-6 bg-white rounded-xl mb-8 hidden max-w-2xl mx-auto border-t-4 border-accent">
+                        <h3 class="text-xl font-semibold mb-4">Confirmar Reserva a las <span id="selected-time-display" class="text-accent"></span></h3>
+                        
+                        <form id="public-booking-form">
+                            <input type="hidden" id="public-booking-date-hidden">
+                            <input type="hidden" id="public-booking-time-hidden">
+                            <input type="hidden" id="public-booking-clinic-hidden">
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="public-patient-name" class="block text-sm font-medium text-gray-700">Tu Nombre Completo</label>
+                                    <input type="text" id="public-patient-name" required class="mt-1 block w-full p-2 border rounded-md shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="public-patient-phone" class="block text-sm font-medium text-gray-700">Tu Teléfono</label>
+                                    <input type="tel" id="public-patient-phone" required class="mt-1 block w-full p-2 border rounded-md shadow-sm">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label for="public-notes" class="block text-sm font-medium text-gray-700">Motivo/Notas (Opcional)</label>
+                                    <textarea id="public-notes" rows="2" class="mt-1 block w-full p-2 border rounded-md shadow-sm"></textarea>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="action-button mt-6 px-4 py-2 rounded-lg bg-accent hover:bg-primary">
+                                Reservar Cita
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+
+            // Inicializar Listeners de la vista pública
+            document.getElementById('booking-clinic-select').addEventListener('change', (e) => {
+                const newClinicId = e.target.value;
+                const today = new Date();
+                const nextActiveDay = getNextActiveDay(newClinicId, today, 1);
+                document.getElementById('booking-date').value = formatInputDate(nextActiveDay);
+                loadAvailableSlots(newClinicId, nextActiveDay);
+                document.getElementById('booking-form-container').classList.add('hidden');
+            });
+
+            document.getElementById('booking-date').addEventListener('change', (e) => {
+                const newDateStr = e.target.value;
+                const [year, month, day] = newDateStr.split('-').map(Number);
+                const newDate = new Date(year, month - 1, day);
+                newDate.setHours(0, 0, 0, 0);
+
+                const clinicId = document.getElementById('booking-clinic-select').value;
+
+                if (!isClinicDayActive(clinics.find(c => c.id === clinicId), newDate)) {
+                    showMessage("El consultorio está cerrado en esta fecha. Seleccione un día activo.", true);
+                    // Forzar a la fecha anterior si es inválida
+                    const today = new Date();
+                    e.target.value = formatInputDate(getNextActiveDay(clinicId, today, 1));
+                    newDate.setTime(today.getTime()); 
+                }
+                loadAvailableSlots(clinicId, newDate);
+                document.getElementById('booking-form-container').classList.add('hidden');
+            });
+            
+            document.getElementById('public-booking-form').onsubmit = handlePublicBookingSubmit;
+            
+            // Cargar slots iniciales
+            loadAvailableSlots(initialClinicId, initialDate);
+        }
+
+        function loadAvailableSlots(clinicId, date) {
+            const clinic = clinics.find(c => c.id === clinicId);
+            const slotsContainer = document.getElementById('available-slots-container');
+            const slotsMessage = document.getElementById('slots-message');
+            const dateDisplay = document.getElementById('slots-date-display');
+            
+            // FIX: Verificar si los elementos del DOM existen antes de usarlos (solución al TypeError)
+            if (!clinic || !slotsContainer || !slotsMessage || !dateDisplay) return;
+
+            dateDisplay.textContent = formatDate(date);
+            slotsContainer.innerHTML = '';
+            slotsMessage.classList.remove('hidden');
+
+            if (!isClinicDayActive(clinic, date)) {
+                slotsMessage.textContent = `🚫 El consultorio "${clinic.name}" está cerrado el ${DAY_NAMES_FULL[date.getDay()]}, ${formatDate(date)}.`;
+                return;
+            }
+
+            const availableSlots = getAvailableSlots(clinic, date);
+            
+            if (availableSlots.length === 0) {
+                slotsMessage.textContent = '¡Agenda Llena! No hay horarios disponibles para este día.';
+                return;
+            }
+
+            slotsMessage.classList.add('hidden');
+            availableSlots.forEach(time => {
+                const button = document.createElement('button');
+                button.textContent = time;
+                button.className = 'bg-primary text-white hover:bg-accent px-4 py-2 rounded-lg font-semibold transition-colors';
+                button.onclick = () => selectSlot(clinicId, date, time);
+                slotsContainer.appendChild(button);
+            });
+        }
+        
+        window.selectSlot = function(clinicId, date, time) {
+            const formContainer = document.getElementById('booking-form-container');
+            
+            // Llenar campos ocultos
+            document.getElementById('public-booking-clinic-hidden').value = clinicId;
+            document.getElementById('public-booking-date-hidden').value = formatInputDate(date);
+            document.getElementById('public-booking-time-hidden').value = time;
+            
+            // Mostrar hora y formulario
+            document.getElementById('selected-time-display').textContent = time;
+            formContainer.classList.remove('hidden');
+            formContainer.scrollIntoView({ behavior: 'smooth' });
+            
+            // Deseleccionar slots previamente seleccionados
+            document.querySelectorAll('#available-slots-container button').forEach(btn => {
+                btn.classList.remove('ring-4', 'ring-accent', 'ring-opacity-50');
+                if (btn.textContent === time) {
+                    btn.classList.add('ring-4', 'ring-accent', 'ring-opacity-50');
+                }
+            });
+        }
+
+        async function handlePublicBookingSubmit(e) {
+            e.preventDefault();
+
+            const clinicId = document.getElementById('public-booking-clinic-hidden').value;
+            const dateStr = document.getElementById('public-booking-date-hidden').value;
+            const timeStr = document.getElementById('public-booking-time-hidden').value;
+            
+            const patientName = document.getElementById('public-patient-name').value.trim();
+            const patientPhone = document.getElementById('public-patient-phone').value.trim();
+            const notes = document.getElementById('public-notes').value.trim();
+
+            if (!patientName || !patientPhone) {
+                return showMessage("Por favor, ingrese su nombre y teléfono.", true);
+            }
+
+            // 1. Crear el objeto de fecha/hora (y validar rápidamente si el slot sigue libre)
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const [hour, minute] = timeStr.split(':').map(Number);
+            const localDateTime = new Date(year, month - 1, day, hour, minute);
+
+            const selectedClinic = clinics.find(c => c.id === clinicId);
+            const reqMinutes = getTimeInMinutes(timeStr);
+
+            // Re-validar si el slot está ocupado justo antes de reservar (para evitar duplicados online)
+            const appointmentsForDay = appointments
+                .filter(a => a.clinicId === clinicId)
+                .filter(a => formatDate(a.dateTime) === formatDate(localDateTime));
+                
+            const isSlotOccupied = appointmentsForDay.some(a => getTimeInMinutes(formatTime(a.dateTime)) === reqMinutes);
+            
+            if (isSlotOccupied) {
+                showMessage(`¡Lo sentimos! El turno de ${timeStr} acaba de ser reservado. Por favor, seleccione otro horario.`, true);
+                loadAvailableSlots(clinicId, localDateTime); // Refresca los slots
+                document.getElementById('booking-form-container').classList.add('hidden');
+                return;
+            }
+
+            // 2. PREPARAR DATOS PARA FIRESTORE
+            const bookingData = {
+                clinicId: clinicId,
+                patientName,
+                patientPhone, 
+                dateTime: localDateTime, 
+                notes,
+                bookedBy: 'Online', // Marca para distinguir de la reserva del médico
+            };
+
+            try {
+                // CREAR EN FIRESTORE
+                await addDoc(getAppointmentsRef(), bookingData);
+                
+                showMessage(`✅ ¡Turno reservado con éxito! Recibirás una confirmación.`, false);
+                document.getElementById('public-booking-form').reset();
+                document.getElementById('booking-form-container').classList.add('hidden');
+                
+                // Forzar un refresh del selector y slots
+                loadAvailableSlots(clinicId, localDateTime);
+
+            } catch (error) {
+                console.error("Error al reservar turno online:", error);
+                showMessage("Error al procesar la reserva. Inténtelo de nuevo.", true);
+            }
+        }
+
+        // --- VISTA: AGENDA DIARIA (Uso Médico) ---
+        
+        function renderScheduleView() {
+            // ... (Lógica de renderScheduleView idéntica a v17)
+            const clinic = clinics.find(c => c.id === currentClinicId);
+            if (!clinic) return; 
+
+            const today = currentViewDate; 
+            const dayIndex = today.getDay();
+            const dayName = DAY_NAMES_FULL[dayIndex];
+            
+            const isWorkingDay = isClinicDayActive(clinic, today);
+            
+            if (!isWorkingDay) {
+                contentAreaEl.innerHTML = `
+                    <div class="p-8 text-center text-xl text-red-500">
+                        Error de navegación: El día ${dayName}, ${formatDate(today)} no está activo para el consultorio.
+                        <button onclick="showView('schedule')" class="action-button mt-4 px-6 py-2 rounded-lg">Ir al Próximo Día Activo</button>
+                    </div>
+                `;
+                return;
+            }
+
+            const daySchedule = clinic.schedule?.[dayIndex];
+
+            const appointmentsForDay = appointments
+                .filter(a => a.clinicId === clinic.id)
+                .filter(a => formatDate(a.dateTime) === formatDate(today));
+
+            let capacityInfo = '';
+            let maxSlots = 0;
+            let reserved = appointmentsForDay.length;
+            
+            if (isWorkingDay) {
+                const startM = getTimeInMinutes(daySchedule.start);
+                const endM = getTimeInMinutes(daySchedule.end);
+                const totalM = endM - startM;
+                maxSlots = Math.floor(totalM / clinic.appointmentDuration);
+                
+                capacityInfo = `
+                    <p class="text-sm text-gray-700 mt-2">
+                        Duración por consulta: <span class="font-semibold">${clinic.appointmentDuration} min</span>. 
+                        Slots ocupados: <span class="font-bold ${reserved >= maxSlots ? 'text-red-600' : 'text-primary'}">${reserved} / ${maxSlots}</span>
+                    </p>
+                `;
+            }
+
+            const html = `
+                <div class="p-4 md:p-8">
+                    <h2 class="text-2xl font-bold mb-6 text-dark-green border-b pb-2">Agenda Diaria: ${clinic.name}</h2>
+                    
+                    <!-- Controles de Navegación -->
+                    <div class="flex flex-wrap justify-between items-center mb-6 p-3 bg-white rounded-xl card max-w-xl mx-auto">
+                        <span class="text-lg font-semibold w-12 text-center text-dark-green hidden md:block">Agenda:</span>
+                        <div class="flex items-center space-x-3 w-full justify-between md:w-auto">
+                            <button onclick="navigateSchedule(-1)" class="action-button px-3 py-1 rounded-full text-xl hover:scale-110 transition-transform">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M15 18l-6-6 6-6"/></svg>
+                            </button>
+                            <span class="text-lg font-semibold w-full text-center md:w-48" id="current-date-display">${dayName}, ${formatDate(today)}</span>
+                            <button onclick="navigateSchedule(1)" class="action-button px-3 py-1 rounded-full text-xl hover:scale-110 transition-transform">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Fin Controles de Navegación -->
+
+
+                    <div class="bg-white p-6 rounded-xl card max-w-xl mx-auto">
+                        <h3 class="text-xl font-bold mb-4">Agenda para ${dayName}, ${formatDate(today)}</h3>
+                        
+                        <p class="text-primary mb-4">Horario de Atención: ${daySchedule.start} - ${daySchedule.end}</p> ${capacityInfo}
+                        
+                        <h4 class="font-semibold mb-3 border-t pt-3">Turnos:</h4>
+                        <div class="space-y-3">
+                            ${appointmentsForDay.length > 0 ? appointmentsForDay.map(app => `
+                                <div class="appointment-item card p-4 mb-3 rounded-lg flex justify-between items-start text-dark-green">
+                                    <div>
+                                        <p class="font-bold text-lg">${app.patientName} ${app.bookedBy === 'Online' ? '<span class="text-xs font-semibold bg-accent text-white px-1 rounded">WEB</span>' : ''}</p>
+                                        <p class="text-base text-gray-700">${formatTime(app.dateTime)} | ${app.patientPhone}</p>
+                                        ${app.notes ? `<p class="text-sm italic mt-1 text-gray-600">Notas: ${app.notes}</p>` : ''}
+                                    </div>
+                                    <div class="flex flex-col space-y-1">
+                                        <button onclick="editAppointment('${app.id}')" class="btn-edit text-xs px-2 py-1 rounded-md font-semibold transition-colors">
+                                            Editar
+                                        </button>
+                                        <button onclick="shareAppointment('${app.id}')" class="btn-share text-xs px-2 py-1 rounded-md font-semibold transition-colors">
+                                            Compartir
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('') : '<p class="text-gray-500">No hay turnos para este día.</p>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            contentAreaEl.innerHTML = html;
+        }
+
+        window.navigateSchedule = function(direction) {
+            currentViewDate.setDate(currentViewDate.getDate() + direction);
+            
+            currentViewDate = getNextActiveDay(currentClinicId, currentViewDate, direction);
+            
+            renderScheduleView();
+        }
+        
+        // --- INICIO DE LA APLICACIÓN ---
+        window.onload = () => {
+            // La inicialización ahora espera la autenticación en onAuthStateChanged
+        }
     </script>
+</head>
+<body class="min-h-screen">
+    <div id="app-container" class="max-w-7xl mx-auto p-4 md:p-8">
+        
+        <!-- Mensaje de Feedback Temporal -->
+        <div id="feedback-message" class="hidden fixed top-4 right-4 p-4 rounded-xl border-l-4 font-medium z-50 transition-all"></div>
+
+        <!-- Encabezado y Navegación -->
+        <header class="mb-8 p-4 rounded-xl card header-title flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <h1 class="text-3xl font-extrabold text-dark-green">
+                Agenda de Consultorios Online
+            </h1>
+            <nav>
+                <ul class="flex flex-wrap justify-center md:justify-end space-x-2 md:space-x-4">
+                    <li><button onclick="showView('schedule')" class="nav-item px-4 py-2 rounded-lg transition-colors">Agenda Diaria</button></li>
+                    <li><button onclick="showView('appointments')" class="nav-item px-4 py-2 rounded-lg transition-colors">Agendar Turno (Médico)</button></li>
+                    <li><button onclick="showView('manage-clinics')" class="nav-item px-4 py-2 rounded-lg transition-colors">Gestión de Consultorios</button></li>
+                    <li><button onclick="showView('public-booking')" class="nav-item px-4 py-2 rounded-lg transition-colors bg-accent hover:bg-primary text-white">Turnos Online (Público)</button></li>
+                </ul>
+            </nav>
+        </header>
+
+        <!-- Selector de Consultorios (Solo visible para vistas de gestión) -->
+        <div id="clinic-selector-container" class="mb-6 p-4 bg-white rounded-xl card flex items-center space-x-4 hidden">
+            <label for="clinic-select" class="font-semibold text-dark-green whitespace-nowrap">Consultorio Actual:</label>
+            <select id="clinic-select" class="flex-grow p-2 border rounded-md shadow-sm"></select>
+        </div>
+
+        <!-- Estado de Autenticación y Carga (Ahora con Firebase) -->
+        <div class="text-sm text-gray-500 mb-4 flex flex-wrap justify-between items-center">
+            <span id="auth-status">Estado: Conectando...</span>
+            <span id="user-id-display" class="truncate max-w-xs">ID de Usuario: (Obteniendo...)</span>
+        </div>
+
+        <div id="loading-message" class="text-center p-8 text-xl font-medium">Conectando a Firebase y cargando datos...</div>
+
+        <!-- Área de Contenido Principal (Vistas) -->
+        <main id="content-area">
+            <!-- Contenido inyectado -->
+        </main>
+        
+    </div>
 </body>
 </html>
