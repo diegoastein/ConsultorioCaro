@@ -81,8 +81,8 @@
         // DEBES reemplazar el contenido de este objeto con tu configuración real de Firebase.
         // Consulta la configuración de tu proyecto en la Consola de Firebase -> Configuración del proyecto.
 
-        const FIREBASE_API_KEY_PLACEHOLDER = "TU_API_KEY_AQUI";
-        const FIREBASE_PROJECT_ID_PLACEHOLDER = "TU_PROJECT_ID";
+        const FIREBASE_API_KEY_PLACEHOLDER = "AIzaSyDI9Jk2skbIshHQO-yPhQjEO4NyK3JSlc4";
+        const FIREBASE_PROJECT_ID_PLACEHOLDER = "registroconsul";
 
         // 1. Detección de entorno
         const isCanvasEnvironment = typeof __firebase_config !== 'undefined';
@@ -107,9 +107,6 @@
   messagingSenderId: "948108455494",
   appId: "1:948108455494:web:78e3071201eb9751c22447"
 };
-            appId = firebaseConfig.projectId;
-            initialAuthToken = null; 
-        }
         
         // Inicialización de Firebase
         setLogLevel('debug');
@@ -176,8 +173,6 @@
                 console.error("Error durante la autenticación:", error);
                 authStatusEl.textContent = 'Estado: Error de Autenticación';
                 userIdDisplayEl.textContent = 'ID de Usuario: (Fallo en Firebase)';
-                // Si la autenticación falla, es un error de credenciales, pero continuamos con setupFirestoreListeners() 
-                // para que la UI al menos intente cargar si hay datos almacenados previamente (aunque fallará al intentar leer/escribir).
             }
         }
 
@@ -187,13 +182,21 @@
                 authStatusEl.textContent = 'Estado: Conectado (Gestión)';
                 userIdDisplayEl.textContent = `ID de Usuario: ${userId}`;
             } else {
+                userId = null; // Asegurar que userId es nulo si no hay usuario
                 authStatusEl.textContent = 'Estado: Desconectado';
                 userIdDisplayEl.textContent = 'ID de Usuario: (Anónimo)';
             }
             
             if (!authReadyCheck) { // Ejecutar listeners solo una vez al finalizar el primer chequeo
                  isAuthReady = true;
-                 setupFirestoreListeners();
+                 // **AJUSTE CRÍTICO APLICADO AQUÍ**
+                 // Intentamos configurar listeners solo si hay una base de datos inicializada
+                 if (db) { 
+                     setupFirestoreListeners();
+                 } else {
+                     // Esto ocurre si las credenciales de GH Pages son incorrectas/faltan.
+                     loadingEl.classList.add('hidden');
+                 }
                  loadingEl.classList.add('hidden');
                  authReadyCheck = true;
             }
@@ -205,7 +208,8 @@
         // --- LISTENERS DE FIRESTORE (REEMPLAZANDO LOCAL STORAGE) ---
 
         function setupFirestoreListeners() {
-             if (!db || !isAuthReady) return; // Si la inicialización falló o la Auth no está lista, salir.
+             // Ahora solo se llama si db está inicializado Y la auth ha terminado su primer chequeo.
+             if (!db || !isAuthReady) return; 
 
             // 1. Escuchar Consultorios (Clinics)
             onSnapshot(getClinicsRef(), (snapshot) => {
@@ -226,7 +230,7 @@
                 }
             }, (error) => {
                 console.error("Error al escuchar consultorios:", error);
-                showMessage(`Error al cargar consultorios: ${error.message}`, true);
+                showMessage(`Error al cargar consultorios: ${error.message}. Verifica las Reglas de Seguridad.`, true);
             });
 
             // 2. Escuchar Turnos (Appointments)
@@ -244,7 +248,7 @@
                 renderCurrentView(); 
             }, (error) => {
                 console.error("Error al escuchar turnos:", error);
-                showMessage(`Error al cargar turnos: ${error.message}`, true);
+                showMessage(`Error al cargar turnos: ${error.message}. Verifica las Reglas de Seguridad.`, true);
             });
         }
 
