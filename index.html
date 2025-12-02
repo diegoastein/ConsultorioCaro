@@ -79,7 +79,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, Component, useRef, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug } from 'lucide-react';
+        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug, PlusCircle } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
@@ -94,11 +94,11 @@
             }
         }
 
-        // --- MODELO INICIAL ---
+        // --- MODELO INICIAL (Actualizado con Strings para HH:MM) ---
         const DEFAULT_CONSULTORIOS = [
-            { id: 1, name: "Consultorio Central", address: "Av. Corrientes 1234, PB", days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17, duration: 30, insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"], color: 'blue', blockedDates: [] },
-            { id: 2, name: "Clínica Norte", address: "Calle 14 Nro 500, San Martín", days: [1, 3, 5], startHour: 14, endHour: 20, duration: 20, insurances: ["IOMA", "PAMI", "Particular"], color: 'emerald', blockedDates: [] },
-            { id: 3, name: "Consultorio Pediatría", address: "Mitre 880, 1ro A", days: [2, 4], startHour: 10, endHour: 16, duration: 45, insurances: ["Todas las Obras Sociales"], color: 'rose', blockedDates: [] }
+            { id: 1, name: "Consultorio Central", address: "Av. Corrientes 1234, PB", days: [1, 2, 3, 4, 5], startHour: "09:00", endHour: "17:00", duration: 30, insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"], color: 'blue', blockedDates: [] },
+            { id: 2, name: "Clínica Norte", address: "Calle 14 Nro 500, San Martín", days: [1, 3, 5], startHour: "14:30", endHour: "20:00", duration: 20, insurances: ["IOMA", "PAMI", "Particular"], color: 'emerald', blockedDates: [] },
+            { id: 3, name: "Consultorio Pediatría", address: "Mitre 880, 1ro A", days: [2, 4], startHour: "10:00", endHour: "16:15", duration: 45, insurances: ["Todas las Obras Sociales"], color: 'rose', blockedDates: [] }
         ];
         const COLOR_PALETTE = [{id:'blue', hex:'#2563eb'}, {id:'emerald', hex:'#059669'}, {id:'rose', hex:'#e11d48'}, {id:'amber', hex:'#d97706'}, {id:'purple', hex:'#7c3aed'}];
         const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -106,30 +106,36 @@
         // --- UTILS & UI COMPONENTS ---
         const formatDateDisplay = (s) => { if(!s) return '-'; try { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; } catch(e){return s;} };
         const calculateAge = (s) => { if(!s) return ''; const t = new Date(), b = new Date(s); let a = t.getFullYear() - b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) a--; return isNaN(a)?'':a; };
+        // Helper para convertir "HH:MM" a minutos desde medianoche
+        const timeToMin = (t) => { if(!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+        // Helper para convertir minutos a "HH:MM"
+        const minToTime = (min) => { const h = Math.floor(min / 60).toString().padStart(2, '0'); const m = (min % 60).toString().padStart(2, '0'); return `${h}:${m}`; };
+
         const Toast = ({m, t, c}) => { useEffect(()=>{const tm=setTimeout(c,3000);return ()=>clearTimeout(tm)},[c]); const bg = t==='success'?'bg-emerald-600':'bg-red-500'; return <div className={`fixed top-4 right-4 z-50 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 fade-in ${bg}`}>{t==='success'?<CheckCircle2 size={20}/>:<AlertCircle size={20}/>}<span>{m}</span></div>; };
-        const Modal = ({isOpen, onClose, onConfirm, title, children, color='blue', confirmText="Confirmar", showCancel=true}) => { if(!isOpen) return null; return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm"><div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-${color}-500 p-6`}><div className="flex justify-between mb-4"><h3 className="text-xl font-bold text-gray-900">{title}</h3><button onClick={onClose}><X size={24} className="text-gray-400"/></button></div><div className="mb-6 text-gray-600">{children}</div><div className="flex gap-3">{showCancel && <button onClick={onClose} className="flex-1 px-4 py-3 border rounded-lg font-medium hover:bg-gray-50">Cancelar</button>}<button onClick={onConfirm} className={`flex-1 px-4 py-3 rounded-lg text-white font-bold shadow-md bg-${color}-600 hover:bg-${color}-700 transition-colors flex justify-center items-center gap-2`}>{confirmText}</button></div></div></div>; };
+        const Modal = ({isOpen, onClose, onConfirm, title, children, color='blue', confirmText="Confirmar", showCancel=true}) => { if(!isOpen) return null; return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm"><div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-${color}-500 p-6 max-h-[90vh] overflow-y-auto`}><div className="flex justify-between mb-4"><h3 className="text-xl font-bold text-gray-900">{title}</h3><button onClick={onClose}><X size={24} className="text-gray-400"/></button></div><div className="mb-6 text-gray-600">{children}</div><div className="flex gap-3">{showCancel && <button onClick={onClose} className="flex-1 px-4 py-3 border rounded-lg font-medium hover:bg-gray-50">Cancelar</button>}<button onClick={onConfirm} className={`flex-1 px-4 py-3 rounded-lg text-white font-bold shadow-md bg-${color}-600 hover:bg-${color}-700 transition-colors flex justify-center items-center gap-2`}>{confirmText}</button></div></div></div>; };
         const Card = ({children, className="", onClick, ...p}) => <div className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} onClick={onClick} {...p}>{children}</div>;
-        const Button = ({children, onClick, disabled, icon:Icon, fullWidth, className=""}) => <button onClick={onClick} disabled={disabled} className={`px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 bg-medical-600 text-white hover:bg-medical-700 disabled:opacity-50 ${fullWidth?'w-full':''} ${className}`}>{disabled?<Loader2 className="animate-spin"/>:(Icon && <Icon size={20}/>)}{children}</button>;
+        const Button = ({children, onClick, disabled, icon:Icon, fullWidth, className="", variant="primary"}) => {
+            const baseClass = "px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50";
+            const variants = {
+                primary: "bg-medical-600 text-white hover:bg-medical-700 shadow-md",
+                secondary: "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50",
+                ghost: "text-gray-500 hover:text-medical-600 hover:bg-medical-50"
+            };
+            return <button onClick={onClick} disabled={disabled} className={`${baseClass} ${variants[variant] || variants.primary} ${fullWidth?'w-full':''} ${className}`}>{disabled?<Loader2 className="animate-spin"/>:(Icon && <Icon size={20}/>)}{children}</button>;
+        };
         const LoginModal = ({isOpen, onClose, onSuccess}) => { const [p,sP]=useState(''), [e,sE]=useState(false); const sub=()=>{if(p==='1234'){onSuccess();sP('');sE(false)}else{sE(true)}}; return <Modal isOpen={isOpen} onClose={onClose} onConfirm={sub} title="Acceso Profesional" confirmText="Ingresar" color="purple"><div className="space-y-4"><p className="text-sm text-gray-600">Ingrese su clave para acceder a la agenda.</p><div className="relative"><KeyRound className="absolute left-3 top-3 text-gray-400" size={20}/><input type="password" autoFocus className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-purple-200" value={p} onChange={e=>{sP(e.target.value);sE(false)}} onKeyDown={e=>e.key==='Enter'&&sub()}/></div>{e && <p className="text-xs text-red-500">Clave incorrecta.</p>}</div></Modal>; };
 
         // --- APP PRINCIPAL ---
         const App = () => {
             
-            // =================================================================================
-            // =========================  ZONA DE CONFIGURACIÓN  ===============================
-            // =================================================================================
-            // ↓↓↓↓↓ PEGA AQUÍ TUS CLAVES ↓↓↓↓↓
-            
             const firebaseConfig = useMemo(() => ({
                 apiKey: "AIzaSyAP75W__uvlcB5GU4Q7MbbMjV0Pz7knmIc",
-  authDomain: "agendapoliconsultorio.firebaseapp.com",
-  projectId: "agendapoliconsultorio",
-  storageBucket: "agendapoliconsultorio.firebasestorage.app",
-  messagingSenderId: "32383914542",
-  appId: "1:32383914542:web:a24b8d63d1c6c22f0905bf"
+                authDomain: "agendapoliconsultorio.firebaseapp.com",
+                projectId: "agendapoliconsultorio",
+                storageBucket: "agendapoliconsultorio.firebasestorage.app",
+                messagingSenderId: "32383914542",
+                appId: "1:32383914542:web:a24b8d63d1c6c22f0905bf"
             }), []);
-
-            // =================================================================================
 
             const [view, setView] = useState('landing');
             const [appointments, setAppointments] = useState([]);
@@ -142,12 +148,8 @@
             const [directRoomId, setDirectRoomId] = useState(null);
             const isMounted = useRef(true);
 
-            // CORRECCIÓN 1: UseCallback para asegurar estabilidad en la función de cierre del Toast
             const closeToast = useCallback(() => setToast(null), []);
 
-            // CORRECCIÓN 2: Separación de Efectos para evitar Race Conditions
-            
-            // Efecto A: Carga de Datos Locales (Solo una vez al montar)
             useEffect(() => {
                 try {
                     const localData = localStorage.getItem('appointments');
@@ -163,27 +165,29 @@
                     if (localConsultorios) {
                         const parsed = JSON.parse(localConsultorios);
                         if (Array.isArray(parsed)) {
-                            const safe = parsed.map(c => ({...c, duration: Number(c.duration) > 0 ? Number(c.duration) : 30}));
+                            const safe = parsed.map(c => ({
+                                ...c, 
+                                duration: Number(c.duration) > 0 ? Number(c.duration) : 30,
+                                // Migración: asegurar que startHour/endHour sean strings HH:MM si vienen viejos
+                                startHour: String(c.startHour).includes(':') ? c.startHour : `${c.startHour}:00`,
+                                endHour: String(c.endHour).includes(':') ? c.endHour : `${c.endHour}:00`,
+                            }));
                             setConsultorios(safe);
                         }
                     }
                 } catch (e) { console.error("Error local storage", e); }
 
-                // Revisar parámetros URL solo una vez
                 const params = new URLSearchParams(window.location.search);
                 const roomParam = params.get('room');
                 if (roomParam) {
                     const id = parseInt(roomParam);
-                    // Aquí usamos una referencia temporal o esperamos al render, pero para parámetros URL está bien leerlos así
-                    // Nota: consultorios es una dependencia externa, pero para la lógica inicial asumimos los por defecto si no han cargado
                     if (!isNaN(id)) {
                         setDirectRoomId(id);
                         setView('patient');
                     }
                 }
-            }, []); // Sin dependencias, corre solo al montar
+            }, []);
 
-            // Efecto B: Inicialización de Firebase (Independiente de los datos locales)
             useEffect(() => {
                 const initFirebase = async () => {
                     if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
@@ -194,34 +198,23 @@
                     try {
                         if(isMounted.current) setFirebaseState(s => ({ ...s, status: 'Conectando...' }));
                         
-                        // Aumentamos timeout a 15 segundos por seguridad
                         const timeoutPromise = new Promise((_, reject) => 
                             setTimeout(() => reject(new Error("Tiempo de espera agotado. Usando Modo Offline.")), 15000)
                         );
 
                         const connectionPromise = (async () => {
                             let app;
-                            // Chequeo más robusto de apps existentes
-                            if (getApps().length === 0) {
-                                app = initializeApp(firebaseConfig);
-                            } else {
-                                app = getApp();
-                            }
+                            if (getApps().length === 0) app = initializeApp(firebaseConfig);
+                            else app = getApp();
 
                             const auth = getAuth(app);
-                            // Optimización: Si ya hay usuario (persistencia), no intentar loguear de nuevo
-                            if (!auth.currentUser) {
-                                await signInAnonymously(auth);
-                            }
-                            
-                            const database = getFirestore(app);
-                            return database;
+                            if (!auth.currentUser) await signInAnonymously(auth);
+                            return getFirestore(app);
                         })();
 
                         const database = await Promise.race([connectionPromise, timeoutPromise]);
                         
                         if (!isMounted.current) return;
-                        
                         setDb(database);
                         
                         const q = collection(database, "appointments");
@@ -229,9 +222,7 @@
                         const remoteData = [];
                         snap.forEach(doc => {
                             const d = doc.data();
-                            if (d && d.name && d.date && d.slot) {
-                                remoteData.push({ ...d, id: doc.id });
-                            }
+                            if (d && d.name && d.date && d.slot) remoteData.push({ ...d, id: doc.id });
                         });
 
                         if (isMounted.current) {
@@ -244,18 +235,12 @@
 
                     } catch (error) {
                         console.warn("Firebase Init Warning:", error);
-                        if (isMounted.current) {
-                            setFirebaseState({ ready: false, error: error.message, status: 'Modo Local (Fallback)' });
-                        }
+                        if (isMounted.current) setFirebaseState({ ready: false, error: error.message, status: 'Modo Local (Fallback)' });
                     }
                 };
 
                 initFirebase();
-                
-                return () => {
-                    isMounted.current = false;
-                };
-            // CORRECCIÓN CRÍTICA: Quitamos 'consultorios' de las dependencias para evitar reinicialización al guardar
+                return () => { isMounted.current = false; };
             }, [firebaseConfig]); 
 
             const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
@@ -275,7 +260,6 @@
                     try {
                         await addDoc(collection(db, "appointments"), newAppointment);
                     } catch (e) {
-                        console.error("Fallo subida:", e);
                         const syncItem = { action: 'ADD', data: newAppointment, timestamp: Date.now() };
                         setPendingSyncs([...pendingSyncs, syncItem]);
                     }
@@ -290,21 +274,9 @@
                 showToast("Estado actualizado", "success");
             };
 
-            // --- DEBUG FOOTER ---
-            const DebugFooter = () => (
-                <div className="fixed bottom-0 left-0 w-full bg-gray-800 text-white text-xs p-1 flex justify-between items-center px-4 z-50 opacity-90">
-                    <div className="flex gap-4">
-                        <span>Estado: <span className={firebaseState.ready ? "text-green-400 font-bold" : firebaseState.error ? "text-yellow-400" : "text-yellow-400"}>{firebaseState.status}</span></span>
-                        <span>Key: {firebaseConfig.apiKey.substring(0, 5)}...</span>
-                    </div>
-                    {firebaseState.error && <span className="text-red-300 cursor-pointer" title={firebaseState.error}>Nota: {firebaseState.error.substring(0, 40)}...</span>}
-                </div>
-            );
-
             // Render Views
             if (view === 'landing') return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-medical-50 to-white relative pb-10">
-                    <DebugFooter />
                     <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} onSuccess={() => { setShowLogin(false); setView('professional'); }} />
                     <div className="absolute top-6 right-6 flex gap-2">
                         <button onClick={() => setShowLogin(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:text-medical-600 shadow-sm transition-all"><Lock size={16} /><span className="hidden sm:inline">Soy Profesional</span></button>
@@ -314,13 +286,12 @@
                         <h1 className="text-5xl font-bold text-gray-900 mb-4 tracking-tight">Consultorios Dra. Carolina Abraldes</h1>
                         <p className="text-gray-600 text-xl">Bienvenido al sistema de gestión de turnos integrado.</p>
                         
-                        {/* MENSAJE DE ERROR DETALLADO */}
                         {firebaseState.error ? (
                             <div className="mt-6 p-3 bg-orange-50 border border-orange-200 rounded-lg max-w-md text-left mx-auto animate-fadeIn flex items-center gap-3">
                                 <WifiOff className="text-orange-500" size={20} />
                                 <div>
                                     <p className="text-sm font-bold text-orange-700">Modo Offline Activo</p>
-                                    <p className="text-xs text-orange-600">No se pudo conectar a la nube ({firebaseState.error}). Puedes usar la agenda localmente.</p>
+                                    <p className="text-xs text-orange-600">No se pudo conectar a la nube. Puedes usar la agenda localmente.</p>
                                 </div>
                             </div>
                         ) : !firebaseState.ready && (
@@ -344,13 +315,11 @@
 
             return (
                 <div className="min-h-screen bg-medical-50 pb-10">
-                    <DebugFooter />
-                    {/* CORRECCIÓN: Usamos key para forzar remontado y closeToast memorizado */}
                     {toast && <Toast key={toast.id} m={toast.message} t={toast.type} c={closeToast} />}
                     <header className="bg-white shadow-sm sticky top-0 z-40"><div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between"><div className="flex items-center gap-2 cursor-pointer" onClick={()=>setView('landing')}><div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20}/></div><span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span></div><div className="flex items-center gap-4"><div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div><Button variant="ghost" onClick={()=>setView('landing')}><LogOut size={18}/> Salir</Button></div></div></header>
                     <main className="max-w-6xl mx-auto px-4 py-8">
                         {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveAppointment(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
-                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation}/>}
+                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation} onManualSave={saveAppointment} />}
                         {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveConsultorios} onBack={()=>setView('professional')}/>}
                     </main>
                 </div>
@@ -402,19 +371,19 @@
                 const [y, m, d] = selectedDate.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d, 12).getDay();
                 
-                // CORREGIDO: Se reemplazó 'dayOfWeek' (que no existía) por 'dateObj'
                 if (!room.days.includes(dateObj)) return []; 
                 
                 const slots = [];
                 const existingApts = appointments.filter(a => a.consultoryId === selectedRoom && a.date === selectedDate);
-                let currentTime = room.startHour * 60;
-                const endTime = room.endHour * 60;
+                
+                // Conversión de HH:MM a minutos para cálculo
+                let currentTime = timeToMin(room.startHour);
+                const endTime = timeToMin(room.endHour);
+                
                 while (currentTime + safeDuration <= endTime) {
-                    const startMin = currentTime;
-                    const formatTime = (min) => { const h = Math.floor(min / 60).toString().padStart(2, '0'); const m = (min % 60).toString().padStart(2, '0'); return `${h}:${m}`; };
-                    const slotLabel = formatTime(startMin);
+                    const slotLabel = minToTime(currentTime);
                     const isOccupied = existingApts.some(apt => apt.slot === slotLabel); 
-                    if (!isOccupied) slots.push({ label: slotLabel, start: startMin, priority: 0 });
+                    if (!isOccupied) slots.push({ label: slotLabel, start: currentTime, priority: 0 });
                     currentTime += safeDuration;
                 }
                 return slots.sort((a, b) => a.start - b.start);
@@ -443,7 +412,7 @@
                                         <p className="text-gray-500 text-sm mb-4">{room.address}</p>
                                         <div className="mt-2 text-sm text-gray-600 space-y-1">
                                             <div className="flex items-center gap-2"><Calendar size={16} className="text-medical-500"/><span className="font-medium">{(room.days || []).map(d => SHORT_DAYS[d]).join(', ') || 'Consultar'}</span></div>
-                                            <div className="flex items-center gap-2"><Clock size={16} className="text-medical-500"/><span className="font-medium">{room.startHour}:00 - {room.endHour}:00 hs</span></div>
+                                            <div className="flex items-center gap-2"><Clock size={16} className="text-medical-500"/><span className="font-medium">{room.startHour} - {room.endHour} hs</span></div>
                                         </div>
                                     </div>
                                     <div className={`mt-4 pt-4 border-t border-gray-100 flex justify-end items-center text-sm text-${room.color || 'blue'}-600 font-medium`}><ChevronRight size={20} /></div>
@@ -505,20 +474,21 @@
             );
         };
 
-        const ProfessionalView = ({ consultorios, appointments, onAdmin, toggleConfirmation }) => {
+        const ProfessionalView = ({ consultorios, appointments, onAdmin, toggleConfirmation, onManualSave }) => {
             const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
             const [filterRoom, setFilterRoom] = useState('all');
             const [expandedAptId, setExpandedAptId] = useState(null);
             const [whatsappModal, setWhatsappModal] = useState({ isOpen: false, data: null, message: '' });
+            const [sobreturnoModal, setSobreturnoModal] = useState(false);
+            const [sobreturnoData, setSobreturnoData] = useState({ consultoryId: '', date: new Date().toISOString().split('T')[0], time: '', name: '', dni: '', phone: '', insurance: '' });
 
             const filteredAppointments = useMemo(() => {
                 return appointments.filter(apt => {
-                    // SAFEGUARD CRÍTICO: Si no tiene slot o date, ignorar
                     if (!apt.date || !apt.slot) return false;
                     const matchDate = apt.date === filterDate;
                     const matchRoom = filterRoom === 'all' || apt.consultoryId === parseInt(filterRoom);
                     return matchDate && matchRoom;
-                }).sort((a, b) => (a.slot || "").localeCompare(b.slot || "")); // SAFEGUARD: Sort seguro
+                }).sort((a, b) => (a.slot || "").localeCompare(b.slot || "")); 
             }, [appointments, filterDate, filterRoom]);
 
             const handleWhatsAppClick = (apt) => {
@@ -528,25 +498,64 @@
 
             const sendWhatsApp = () => {
                 if (!whatsappModal.data) return;
-                const phone = whatsappModal.data.phone.replace(/\D/g,'');
+                let phone = whatsappModal.data.phone.replace(/\D/g,'');
+                // Arreglo para Argentina: si es celular (sin 0 ni 15, aprox 10 dígitos) agregar 549
+                if (phone.length === 10) phone = '549' + phone;
+                // Si tiene 15 al inicio (vieja usanza), quitarlo
+                if (phone.startsWith('15') && phone.length === 10) phone = '549' + phone.substring(2);
+                
                 const text = encodeURIComponent(whatsappModal.message);
                 window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
                 setWhatsappModal({ isOpen: false, data: null, message: '' });
             };
 
+            const handleSobreturnoSubmit = () => {
+                if(!sobreturnoData.consultoryId || !sobreturnoData.time || !sobreturnoData.name) return;
+                const room = consultorios.find(c => c.id === parseInt(sobreturnoData.consultoryId));
+                const newApt = {
+                    id: crypto.randomUUID(),
+                    consultoryId: parseInt(sobreturnoData.consultoryId),
+                    consultoryName: room ? room.name : 'Sobreturno',
+                    name: sobreturnoData.name,
+                    dni: sobreturnoData.dni,
+                    phone: sobreturnoData.phone,
+                    insurance: sobreturnoData.insurance,
+                    date: sobreturnoData.date,
+                    slot: sobreturnoData.time,
+                    timestamp: Date.now(),
+                    status: 'confirmed',
+                    isSobreturno: true
+                };
+                onManualSave(newApt);
+                setSobreturnoModal(false);
+                setSobreturnoData({ consultoryId: '', date: new Date().toISOString().split('T')[0], time: '', name: '', dni: '', phone: '', insurance: '' });
+            };
+
             return (
                 <div className="fade-in space-y-6">
+                    {/* MODAL WHATSAPP */}
                     <Modal isOpen={whatsappModal.isOpen} onClose={() => setWhatsappModal({ ...whatsappModal, isOpen: false })} onConfirm={sendWhatsApp} title="Enviar Recordatorio WhatsApp" color="emerald" confirmText="Enviar Mensaje"><div className="space-y-3"><p className="text-sm text-gray-600">Puede editar el mensaje antes de enviarlo:</p><textarea className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none h-32" value={whatsappModal.message} onChange={(e) => setWhatsappModal({ ...whatsappModal, message: e.target.value })} /><div className="text-xs text-gray-500 flex justify-between"><span>Destinatario: {whatsappModal.data?.name}</span><span>Tel: {whatsappModal.data?.phone}</span></div></div></Modal>
+                    
+                    {/* MODAL SOBRETURNO */}
+                    <Modal isOpen={sobreturnoModal} onClose={() => setSobreturnoModal(false)} onConfirm={handleSobreturnoSubmit} title="Dar Sobreturno Manual" color="rose" confirmText="Agendar Sobreturno"><div className="space-y-4 text-sm">
+                        <div className="p-3 bg-rose-50 text-rose-700 rounded border border-rose-200 text-xs flex gap-2 items-center"><AlertCircle size={16}/><span>Esta acción agendará un turno sin validar disponibilidad horaria.</span></div>
+                        <div><label className="block font-medium text-gray-700 mb-1">Consultorio</label><select className="w-full border rounded p-2" value={sobreturnoData.consultoryId} onChange={e=>setSobreturnoData({...sobreturnoData, consultoryId: e.target.value})}><option value="">Seleccione...</option>{consultorios.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block font-medium text-gray-700 mb-1">Fecha</label><input type="date" className="w-full border rounded p-2" value={sobreturnoData.date} onChange={e=>setSobreturnoData({...sobreturnoData, date: e.target.value})}/></div><div><label className="block font-medium text-gray-700 mb-1">Hora Manual (HH:MM)</label><input type="time" className="w-full border rounded p-2" value={sobreturnoData.time} onChange={e=>setSobreturnoData({...sobreturnoData, time: e.target.value})}/></div></div>
+                        <div><label className="block font-medium text-gray-700 mb-1">Paciente</label><input type="text" placeholder="Nombre completo" className="w-full border rounded p-2" value={sobreturnoData.name} onChange={e=>setSobreturnoData({...sobreturnoData, name: e.target.value})}/></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block font-medium text-gray-700 mb-1">DNI</label><input type="number" className="w-full border rounded p-2" value={sobreturnoData.dni} onChange={e=>setSobreturnoData({...sobreturnoData, dni: e.target.value})}/></div><div><label className="block font-medium text-gray-700 mb-1">Teléfono</label><input type="tel" className="w-full border rounded p-2" value={sobreturnoData.phone} onChange={e=>setSobreturnoData({...sobreturnoData, phone: e.target.value})}/></div></div>
+                    </div></Modal>
+
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold text-gray-800">Agenda Médica</h2>
                         <div className="flex gap-2">
+                             <Button onClick={() => setSobreturnoModal(true)} variant="primary" className="bg-rose-600 hover:bg-rose-700" icon={PlusCircle}>Sobreturno</Button>
                             <Button onClick={onAdmin} variant="secondary" icon={Settings}>Consultorios</Button>
                             <div className="flex gap-3 bg-white p-2 rounded-lg shadow-sm border border-gray-200"><input type="date" className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} /><select className="border-gray-300 rounded-md text-sm focus:ring-medical-500 border p-2 outline-none bg-white" value={filterRoom} onChange={(e) => setFilterRoom(e.target.value)}><option value="all">Todos los Consultorios</option>{consultorios.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                         </div>
                     </div>
                     <div className="grid md:grid-cols-4 gap-6">
                         <Card className="md:col-span-4 bg-gradient-to-r from-medical-600 to-teal-500 text-white border-none"><div className="flex justify-around text-center"><div><p className="text-medical-100 text-sm font-medium">Total Turnos Hoy</p><p className="text-3xl font-bold">{filteredAppointments.length}</p></div><div className="border-l border-medical-400 pl-8"><p className="text-medical-100 text-sm font-medium">Confirmados</p><p className="text-3xl font-bold">{filteredAppointments.filter(a => a.confirmedByProfessional).length}</p></div><div className="border-l border-medical-400 pl-8 hidden sm:block"><p className="text-medical-100 text-sm font-medium">Obras Sociales</p><p className="text-3xl font-bold">{new Set(filteredAppointments.map(a => a.insurance)).size}</p></div></div></Card>
-                        <div className="md:col-span-4"><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="font-bold text-gray-700">Listado de Pacientes</h3><span className="text-xs font-medium text-gray-500">{formatDateDisplay(filterDate)}</span></div>{filteredAppointments.length === 0 ? <div className="p-12 text-center text-gray-400"><Calendar size={48} className="mx-auto mb-3 opacity-20" /><p>No hay turnos registrados para este criterio.</p></div> : <div className="divide-y divide-gray-100">{filteredAppointments.map(apt => (<div key={apt.id} className="border-b border-gray-100 last:border-0"><div className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${expandedAptId === apt.id ? 'bg-gray-50' : ''}`} onClick={() => setExpandedAptId(expandedAptId === apt.id ? null : apt.id)}><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div className="flex items-start gap-4"><div className="bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px]">{apt.slot}</div><div><h4 className="font-bold text-gray-900 flex items-center gap-2">{apt.name} {expandedAptId === apt.id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}</h4><div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500"><span className="flex items-center gap-1 font-medium text-gray-700">DNI: {apt.dni || '-'}</span><span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span></div></div></div><div className="flex items-center gap-2 md:justify-end" onClick={e => e.stopPropagation()}><button onClick={() => handleWhatsAppClick(apt)} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors" title="Enviar WhatsApp"><MessageCircle size={18} /></button><button onClick={() => toggleConfirmation(apt.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${apt.confirmedByProfessional ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`} title={apt.confirmedByProfessional ? "Click para quitar confirmación" : "Click para confirmar asistencia"}>{apt.confirmedByProfessional ? <CheckCircle2 size={14}/> : <Clock size={14}/>}{apt.confirmedByProfessional ? "Confirmado" : "Reservado"}</button></div></div>{expandedAptId === apt.id && <div className="mt-4 pl-0 md:pl-[96px] text-sm text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 animate-fadeIn border-t border-gray-200 pt-4"><p><span className="font-semibold text-gray-700">Teléfono:</span> {apt.phone}</p><p><span className="font-semibold text-gray-700">Fecha Nacimiento:</span> {formatDateDisplay(apt.birthDate)} ({calculateAge(apt.birthDate)} años)</p><p><span className="font-semibold text-gray-700">Cobertura:</span> {apt.insurance}</p><p><span className="font-semibold text-gray-700">DNI Completo:</span> {apt.dni}</p><p className="md:col-span-2 text-xs text-gray-400 mt-2">ID Turno: {apt.id}</p></div>}</div></div>))}</div>}</div></div></div></div>
+                        <div className="md:col-span-4"><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="font-bold text-gray-700">Listado de Pacientes</h3><span className="text-xs font-medium text-gray-500">{formatDateDisplay(filterDate)}</span></div>{filteredAppointments.length === 0 ? <div className="p-12 text-center text-gray-400"><Calendar size={48} className="mx-auto mb-3 opacity-20" /><p>No hay turnos registrados para este criterio.</p></div> : <div className="divide-y divide-gray-100">{filteredAppointments.map(apt => (<div key={apt.id} className="border-b border-gray-100 last:border-0"><div className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${expandedAptId === apt.id ? 'bg-gray-50' : ''}`} onClick={() => setExpandedAptId(expandedAptId === apt.id ? null : apt.id)}><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div className="flex items-start gap-4"><div className={`bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px] ${apt.isSobreturno ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}`}>{apt.slot}</div><div><h4 className="font-bold text-gray-900 flex items-center gap-2">{apt.name} {expandedAptId === apt.id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>} {apt.isSobreturno && <span className="text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded ml-2">Sobreturno</span>}</h4><div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500"><span className="flex items-center gap-1 font-medium text-gray-700">DNI: {apt.dni || '-'}</span><span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span></div></div></div><div className="flex items-center gap-2 md:justify-end" onClick={e => e.stopPropagation()}><button onClick={() => handleWhatsAppClick(apt)} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors" title="Enviar WhatsApp"><MessageCircle size={18} /></button><button onClick={() => toggleConfirmation(apt.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${apt.confirmedByProfessional ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`} title={apt.confirmedByProfessional ? "Click para quitar confirmación" : "Click para confirmar asistencia"}>{apt.confirmedByProfessional ? <CheckCircle2 size={14}/> : <Clock size={14}/>}{apt.confirmedByProfessional ? "Confirmado" : "Reservado"}</button></div></div>{expandedAptId === apt.id && <div className="mt-4 pl-0 md:pl-[96px] text-sm text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 animate-fadeIn border-t border-gray-200 pt-4"><p><span className="font-semibold text-gray-700">Teléfono:</span> {apt.phone}</p><p><span className="font-semibold text-gray-700">Fecha Nacimiento:</span> {formatDateDisplay(apt.birthDate)} ({calculateAge(apt.birthDate)} años)</p><p><span className="font-semibold text-gray-700">Cobertura:</span> {apt.insurance}</p><p><span className="font-semibold text-gray-700">DNI Completo:</span> {apt.dni}</p><p className="md:col-span-2 text-xs text-gray-400 mt-2">ID Turno: {apt.id}</p></div>}</div></div>))}</div>}</div></div></div></div>
             );
         };
 
@@ -559,14 +568,14 @@
             const toggleDay = (consultoryId, dayIndex) => setEditingList(prev => prev.map(c => { if (c.id !== consultoryId) return c; const newDays = c.days.includes(dayIndex) ? c.days.filter(d => d !== dayIndex) : [...c.days, dayIndex].sort(); return { ...c, days: newDays }; }));
             const addBlockedDate = (consultoryId) => { if (!blockDateInput) return; setEditingList(prev => prev.map(c => { if (c.id !== consultoryId) return c; const currentBlocked = c.blockedDates || []; if (!currentBlocked.includes(blockDateInput)) return { ...c, blockedDates: [...currentBlocked, blockDateInput].sort() }; return c; })); setBlockDateInput(''); };
             const removeBlockedDate = (consultoryId, dateToRemove) => setEditingList(prev => prev.map(c => c.id === consultoryId ? { ...c, blockedDates: c.blockedDates.filter(d => d !== dateToRemove) } : c));
-            const addNew = () => { const newId = Math.max(...editingList.map(c => c.id), 0) + 1; setEditingList([...editingList, { id: newId, name: "Nuevo Consultorio", address: "", days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17, duration: 30, insurances: [], color: 'blue', blockedDates: [] }]); setExpandedId(newId); };
+            const addNew = () => { const newId = Math.max(...editingList.map(c => c.id), 0) + 1; setEditingList([...editingList, { id: newId, name: "Nuevo Consultorio", address: "", days: [1, 2, 3, 4, 5], startHour: "09:00", endHour: "17:00", duration: 30, insurances: [], color: 'blue', blockedDates: [] }]); setExpandedId(newId); };
             const remove = (id) => { if (confirm("¿Eliminar?")) setEditingList(editingList.filter(c => c.id !== id)); };
             const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
             return (
                 <div className="max-w-4xl mx-auto fade-in">
                     <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><button onClick={onBack} className="p-2 bg-white rounded-full text-gray-500 hover:text-medical-600 hover:shadow-sm border border-gray-200 transition-all"><ArrowLeft size={20}/></button><h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Settings className="text-medical-600"/> Configuración de Consultorios</h2></div><Button onClick={() => onSave(editingList)} icon={Save}>Guardar Cambios</Button></div>
-                    <div className="space-y-4">{editingList.map(cons => (<Card key={cons.id} className={`transition-all border-l-4 border-l-${cons.color}-500 ${expandedId === cons.id ? 'ring-2 ring-medical-500' : ''}`}><div className="flex justify-between items-start mb-4"><div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)}><div className="flex items-center gap-2"><h3 className="font-bold text-lg text-gray-800">{cons.name}</h3><div className={`w-3 h-3 rounded-full bg-${cons.color}-500`}></div></div><p className="text-sm text-gray-500">{cons.address || "Sin dirección"}</p></div><div className="flex gap-2"><button onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)} className="p-2 text-medical-600 hover:bg-medical-50 rounded">{expandedId === cons.id ? 'Cerrar' : 'Editar'}</button><button onClick={() => remove(cons.id)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 size={18} /></button></div></div>{expandedId === cons.id && (<div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 animate-fadeIn"><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.name} onChange={e => handleChange(cons.id, 'name', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.address} onChange={e => handleChange(cons.id, 'address', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-2">Color Distintivo</label><div className="flex gap-2">{COLOR_PALETTE.map(color => (<button key={color.id} onClick={() => handleChange(cons.id, 'color', color.id)} className={`w-8 h-8 rounded-full border-2 ${cons.color === color.id ? 'border-gray-600 scale-110' : 'border-transparent'} shadow-sm`} style={{ backgroundColor: color.hex }} title={color.label}/>))}</div></div><div className="grid grid-cols-3 gap-2"><div><label className="block text-sm font-medium text-gray-700 mb-1">Inicio</label><input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.startHour} onChange={e => handleChange(cons.id, 'startHour', parseInt(e.target.value))} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Fin</label><input type="number" min="0" max="23" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.endHour} onChange={e => handleChange(cons.id, 'endHour', parseInt(e.target.value))} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Duración</label><input type="number" step="5" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.duration} onChange={e => handleChange(cons.id, 'duration', parseInt(e.target.value))} /></div></div></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Obras Sociales</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.insurances.join(', ')} onChange={e => handleChange(cons.id, 'insurances', e.target.value.split(',').map(s => s.trim()))} /></div><div><label className="block text-sm font-medium text-gray-700 mb-2">Días de Atención</label><div className="flex flex-wrap gap-2">{DAYS.map((day, idx) => (<button key={idx} onClick={() => toggleDay(cons.id, idx)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${cons.days.includes(idx) ? `bg-${cons.color}-600 text-white border-${cons.color}-600` : 'bg-white text-gray-500 border-gray-300'}`}>{day}</button>))}</div></div><div className="bg-gray-50 p-3 rounded-lg border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><AlertTriangle size={14} className="text-orange-500" /> Días Bloqueados (Feriados/Vacaciones)</label><div className="flex gap-2 mb-2"><input type="date" className="flex-1 text-sm border border-gray-300 rounded p-1" value={blockDateInput} onChange={e => setBlockDateInput(e.target.value)} /><button onClick={() => addBlockedDate(cons.id)} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-medium">Bloquear</button></div><div className="flex flex-wrap gap-2">{(cons.blockedDates || []).map(date => (<span key={date} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-100 text-red-700 border border-red-200">{formatDateDisplay(date)}<button onClick={() => removeBlockedDate(cons.id, date)} className="hover:text-red-900"><X size={12}/></button></span>))}</div></div></div></div>)}</Card>))}
+                    <div className="space-y-4">{editingList.map(cons => (<Card key={cons.id} className={`transition-all border-l-4 border-l-${cons.color}-500 ${expandedId === cons.id ? 'ring-2 ring-medical-500' : ''}`}><div className="flex justify-between items-start mb-4"><div className="flex-1 cursor-pointer" onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)}><div className="flex items-center gap-2"><h3 className="font-bold text-lg text-gray-800">{cons.name}</h3><div className={`w-3 h-3 rounded-full bg-${cons.color}-500`}></div></div><p className="text-sm text-gray-500">{cons.address || "Sin dirección"}</p></div><div className="flex gap-2"><button onClick={() => setExpandedId(expandedId === cons.id ? null : cons.id)} className="p-2 text-medical-600 hover:bg-medical-50 rounded">{expandedId === cons.id ? 'Cerrar' : 'Editar'}</button><button onClick={() => remove(cons.id)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 size={18} /></button></div></div>{expandedId === cons.id && (<div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 animate-fadeIn"><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.name} onChange={e => handleChange(cons.id, 'name', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.address} onChange={e => handleChange(cons.id, 'address', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-2">Color Distintivo</label><div className="flex gap-2">{COLOR_PALETTE.map(color => (<button key={color.id} onClick={() => handleChange(cons.id, 'color', color.id)} className={`w-8 h-8 rounded-full border-2 ${cons.color === color.id ? 'border-gray-600 scale-110' : 'border-transparent'} shadow-sm`} style={{ backgroundColor: color.hex }} title={color.label}/>))}</div></div><div className="grid grid-cols-3 gap-2"><div><label className="block text-sm font-medium text-gray-700 mb-1">Inicio</label><input type="time" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.startHour} onChange={e => handleChange(cons.id, 'startHour', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Fin</label><input type="time" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.endHour} onChange={e => handleChange(cons.id, 'endHour', e.target.value)} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Duración (min)</label><input type="number" step="5" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.duration} onChange={e => handleChange(cons.id, 'duration', parseInt(e.target.value))} /></div></div></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Obras Sociales</label><input type="text" className="w-full border border-gray-300 rounded p-2 text-sm" value={cons.insurances.join(', ')} onChange={e => handleChange(cons.id, 'insurances', e.target.value.split(',').map(s => s.trim()))} /></div><div><label className="block text-sm font-medium text-gray-700 mb-2">Días de Atención</label><div className="flex flex-wrap gap-2">{DAYS.map((day, idx) => (<button key={idx} onClick={() => toggleDay(cons.id, idx)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${cons.days.includes(idx) ? `bg-${cons.color}-600 text-white border-${cons.color}-600` : 'bg-white text-gray-500 border-gray-300'}`}>{day}</button>))}</div></div><div className="bg-gray-50 p-3 rounded-lg border border-gray-200"><label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><AlertTriangle size={14} className="text-orange-500" /> Días Bloqueados (Feriados/Vacaciones)</label><div className="flex gap-2 mb-2"><input type="date" className="flex-1 text-sm border border-gray-300 rounded p-1" value={blockDateInput} onChange={e => setBlockDateInput(e.target.value)} /><button onClick={() => addBlockedDate(cons.id)} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-medium">Bloquear</button></div><div className="flex flex-wrap gap-2">{(cons.blockedDates || []).map(date => (<span key={date} className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-100 text-red-700 border border-red-200">{formatDateDisplay(date)}<button onClick={() => removeBlockedDate(cons.id, date)} className="hover:text-red-900"><X size={12}/></button></span>))}</div></div></div></div>)}</Card>))}
                         <button onClick={addNew} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-medical-500 hover:text-medical-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-2 font-medium"><Plus size={20} /> Agregar Nuevo Consultorio</button>
                     </div>
                 </div>
