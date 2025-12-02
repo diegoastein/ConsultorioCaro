@@ -77,7 +77,7 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo, Component, useRef } from 'react';
+        import React, { useState, useEffect, useMemo, Component, useRef, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
         import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -142,8 +142,13 @@
             const [directRoomId, setDirectRoomId] = useState(null);
             const isMounted = useRef(true);
 
+            // CORRECCIÓN 1: UseCallback para asegurar estabilidad en la función de cierre del Toast
+            const closeToast = useCallback(() => setToast(null), []);
+
+            // CORRECCIÓN 2: Separación de Efectos para evitar Race Conditions
+            
+            // Efecto A: Carga de Datos Locales (Solo una vez al montar)
             useEffect(() => {
-                // 1. CARGA SEGURA DATOS LOCALES
                 try {
                     const localData = localStorage.getItem('appointments');
                     const localConsultorios = localStorage.getItem('consultorios');
@@ -164,7 +169,22 @@
                     }
                 } catch (e) { console.error("Error local storage", e); }
 
-                // 2. INICIALIZACIÓN FIREBASE (SEGURO INTERNO CON TIMEOUT)
+                // Revisar parámetros URL solo una vez
+                const params = new URLSearchParams(window.location.search);
+                const roomParam = params.get('room');
+                if (roomParam) {
+                    const id = parseInt(roomParam);
+                    // Aquí usamos una referencia temporal o esperamos al render, pero para parámetros URL está bien leerlos así
+                    // Nota: consultorios es una dependencia externa, pero para la lógica inicial asumimos los por defecto si no han cargado
+                    if (!isNaN(id)) {
+                        setDirectRoomId(id);
+                        setView('patient');
+                    }
+                }
+            }, []); // Sin dependencias, corre solo al montar
+
+            // Efecto B: Inicialización de Firebase (Independiente de los datos locales)
+            useEffect(() => {
                 const initFirebase = async () => {
                     if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
                         if(isMounted.current) setFirebaseState({ ready: false, error: null, status: 'Modo Local' });
@@ -174,13 +194,14 @@
                     try {
                         if(isMounted.current) setFirebaseState(s => ({ ...s, status: 'Conectando...' }));
                         
-                        // TIMEOUT DE SEGURIDAD (7 segundos)
+                        // Aumentamos timeout a 15 segundos por seguridad
                         const timeoutPromise = new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error("Tiempo de espera agotado. Usando Modo Offline.")), 7000)
+                            setTimeout(() => reject(new Error("Tiempo de espera agotado. Usando Modo Offline.")), 15000)
                         );
 
                         const connectionPromise = (async () => {
                             let app;
+                            // Chequeo más robusto de apps existentes
                             if (getApps().length === 0) {
                                 app = initializeApp(firebaseConfig);
                             } else {
@@ -188,21 +209,21 @@
                             }
 
                             const auth = getAuth(app);
-                            // Intentamos login anonimo
-                            await signInAnonymously(auth);
+                            // Optimización: Si ya hay usuario (persistencia), no intentar loguear de nuevo
+                            if (!auth.currentUser) {
+                                await signInAnonymously(auth);
+                            }
                             
                             const database = getFirestore(app);
                             return database;
                         })();
 
-                        // Competencia: Conexión vs Timeout
                         const database = await Promise.race([connectionPromise, timeoutPromise]);
                         
                         if (!isMounted.current) return;
                         
                         setDb(database);
                         
-                        // Carga inicial
                         const q = collection(database, "appointments");
                         const snap = await getDocs(q);
                         const remoteData = [];
@@ -224,29 +245,18 @@
                     } catch (error) {
                         console.warn("Firebase Init Warning:", error);
                         if (isMounted.current) {
-                            // Si falla por timeout o error, pasamos a MODO LOCAL automáticamente pero mostramos aviso
                             setFirebaseState({ ready: false, error: error.message, status: 'Modo Local (Fallback)' });
                         }
                     }
                 };
 
                 initFirebase();
-
-                const params = new URLSearchParams(window.location.search);
-                const roomParam = params.get('room');
-                if (roomParam) {
-                    const id = parseInt(roomParam);
-                    // CORREGIDO: Se usa 'consultorios' en lugar de 'currentConsultorios' que no existía
-                    if (!isNaN(id) && consultorios.find(c => c.id === id)) {
-                        setDirectRoomId(id);
-                        setView('patient');
-                    }
-                }
                 
                 return () => {
                     isMounted.current = false;
                 };
-            }, [firebaseConfig, consultorios]);
+            // CORRECCIÓN CRÍTICA: Quitamos 'consultorios' de las dependencias para evitar reinicialización al guardar
+            }, [firebaseConfig]); 
 
             const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
 
@@ -335,14 +345,12 @@
             return (
                 <div className="min-h-screen bg-medical-50 pb-10">
                     <DebugFooter />
-                    {toast && <Toast m={toast.message} t={toast.type} c={()=>setToast(null)} />}
+                    {/* CORRECCIÓN: Usamos key para forzar remontado y closeToast memorizado */}
+                    {toast && <Toast key={toast.id} m={toast.message} t={toast.type} c={closeToast} />}
                     <header className="bg-white shadow-sm sticky top-0 z-40"><div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between"><div className="flex items-center gap-2 cursor-pointer" onClick={()=>setView('landing')}><div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20}/></div><span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span></div><div className="flex items-center gap-4"><div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div><Button variant="ghost" onClick={()=>setView('landing')}><LogOut size={18}/> Salir</Button></div></div></header>
                     <main className="max-w-6xl mx-auto px-4 py-8">
-                        {/* CORREGIDO: saveApt -> saveAppointment */}
                         {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveAppointment(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
-                        {/* CORREGIDO: toggleConf -> toggleConfirmation */}
                         {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation}/>}
-                        {/* CORREGIDO: saveCons -> saveConsultorios */}
                         {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveConsultorios} onBack={()=>setView('professional')}/>}
                     </main>
                 </div>
