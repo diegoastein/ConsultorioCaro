@@ -236,21 +236,17 @@
                 const roomParam = params.get('room');
                 if (roomParam) {
                     const id = parseInt(roomParam);
-                    if (!isNaN(id) && currentConsultorios.find(c => c.id === id)) {
+                    // CORREGIDO: Se usa 'consultorios' en lugar de 'currentConsultorios' que no existía
+                    if (!isNaN(id) && consultorios.find(c => c.id === id)) {
                         setDirectRoomId(id);
                         setView('patient');
                     }
                 }
-
-                window.addEventListener('online', () => setIsOnline(true));
-                window.addEventListener('offline', () => setIsOnline(false));
                 
                 return () => {
                     isMounted.current = false;
-                    window.removeEventListener('online', () => setIsOnline(true));
-                    window.removeEventListener('offline', () => setIsOnline(false));
                 };
-            }, [firebaseConfig]);
+            }, [firebaseConfig, consultorios]);
 
             const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
 
@@ -342,9 +338,12 @@
                     {toast && <Toast m={toast.message} t={toast.type} c={()=>setToast(null)} />}
                     <header className="bg-white shadow-sm sticky top-0 z-40"><div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between"><div className="flex items-center gap-2 cursor-pointer" onClick={()=>setView('landing')}><div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20}/></div><span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span></div><div className="flex items-center gap-4"><div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div><Button variant="ghost" onClick={()=>setView('landing')}><LogOut size={18}/> Salir</Button></div></div></header>
                     <main className="max-w-6xl mx-auto px-4 py-8">
-                        {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveApt(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
-                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConf}/>}
-                        {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveCons} onBack={()=>setView('professional')}/>}
+                        {/* CORREGIDO: saveApt -> saveAppointment */}
+                        {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveAppointment(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
+                        {/* CORREGIDO: toggleConf -> toggleConfirmation */}
+                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation}/>}
+                        {/* CORREGIDO: saveCons -> saveConsultorios */}
+                        {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveConsultorios} onBack={()=>setView('professional')}/>}
                     </main>
                 </div>
             );
@@ -394,7 +393,10 @@
                 if (room.blockedDates && room.blockedDates.includes(selectedDate)) return [{ blocked: true, reason: 'Fecha bloqueada' }];
                 const [y, m, d] = selectedDate.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d, 12).getDay();
-                if (!room.days.includes(dayOfWeek)) return []; 
+                
+                // CORREGIDO: Se reemplazó 'dayOfWeek' (que no existía) por 'dateObj'
+                if (!room.days.includes(dateObj)) return []; 
+                
                 const slots = [];
                 const existingApts = appointments.filter(a => a.consultoryId === selectedRoom && a.date === selectedDate);
                 let currentTime = room.startHour * 60;
