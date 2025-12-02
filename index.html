@@ -36,25 +36,33 @@
                         }
                     }
                 }
-            }
+            },
+            safelist: [
+                'bg-blue-100', 'text-blue-600', 'border-blue-500', 'bg-blue-600', 'hover:bg-blue-700', 'hover:border-blue-500', 'text-blue-700', 'text-blue-800',
+                'bg-emerald-100', 'text-emerald-600', 'border-emerald-500', 'bg-emerald-600', 'hover:bg-emerald-700', 'hover:border-emerald-500', 'text-emerald-700', 'text-emerald-800',
+                'bg-rose-100', 'text-rose-600', 'border-rose-500', 'bg-rose-600', 'hover:bg-rose-700', 'hover:border-rose-500', 'text-rose-700', 'text-rose-800',
+                'bg-amber-100', 'text-amber-600', 'border-amber-500', 'bg-amber-600', 'hover:bg-amber-700', 'hover:border-amber-500', 'text-amber-700', 'text-amber-800',
+                'bg-purple-100', 'text-purple-600', 'border-purple-500', 'bg-purple-600', 'hover:bg-purple-700', 'hover:border-purple-500', 'text-purple-700', 'text-purple-800',
+                'bg-indigo-100', 'text-indigo-600', 'border-indigo-500', 'bg-indigo-600', 'hover:bg-indigo-700', 'hover:border-indigo-500', 'text-indigo-700', 'text-indigo-800',
+            ]
         }
     </script>
 
-    <!-- Import Map (Versiones estables) -->
+    <!-- Import Map (Versiones estables para Web Components) -->
     <script type="importmap">
     {
         "imports": {
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
             "lucide-react": "https://esm.sh/lucide-react@0.330.0",
-            "firebase/app": "https://esm.sh/firebase@10.8.0/app",
-            "firebase/auth": "https://esm.sh/firebase@10.8.0/auth",
-            "firebase/firestore": "https://esm.sh/firebase@10.8.0/firestore"
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
         }
     }
     </script>
     
-    <!-- Babel for JSX -->
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -69,162 +77,70 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo, Component } from 'react';
+        import React, { useState, useEffect, useMemo, Component, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp } from 'lucide-react';
+        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
-        import { getAuth, signInAnonymously } from 'firebase/auth';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
         
-        // ///////////////////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////////////////
-        // ↓↓↓↓↓ PEGA AQUÍ LOS DATOS DE FIREBASE (Entre las llaves) ↓↓↓↓↓
-        
-        const manualConfig = {
-           apiKey: "AIzaSyAP75W__uvlcB5GU4Q7MbbMjV0Pz7knmIc",
+        // --- ERROR BOUNDARY ---
+        class ErrorBoundary extends Component {
+            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            render() {
+                if (this.state.hasError) return <div className="p-10 text-center flex flex-col items-center justify-center h-screen bg-red-50"><div className="bg-white p-8 rounded-xl shadow-xl border border-red-200 max-w-md"><h2 className="text-red-600 font-bold text-xl mb-4 flex items-center justify-center gap-2"><AlertTriangle/> Error Crítico</h2><p className="text-gray-600 mb-4 text-sm">{this.state.error?.toString()}</p><button onClick={() => {localStorage.clear(); window.location.reload()}} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-all w-full">Reiniciar de Fábrica</button></div></div>;
+                return this.props.children;
+            }
+        }
+
+        // --- MODELO INICIAL ---
+        const DEFAULT_CONSULTORIOS = [
+            { id: 1, name: "Consultorio Central", address: "Av. Corrientes 1234, PB", days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17, duration: 30, insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"], color: 'blue', blockedDates: [] },
+            { id: 2, name: "Clínica Norte", address: "Calle 14 Nro 500, San Martín", days: [1, 3, 5], startHour: 14, endHour: 20, duration: 20, insurances: ["IOMA", "PAMI", "Particular"], color: 'emerald', blockedDates: [] },
+            { id: 3, name: "Consultorio Pediatría", address: "Mitre 880, 1ro A", days: [2, 4], startHour: 10, endHour: 16, duration: 45, insurances: ["Todas las Obras Sociales"], color: 'rose', blockedDates: [] }
+        ];
+        const COLOR_PALETTE = [{id:'blue', hex:'#2563eb'}, {id:'emerald', hex:'#059669'}, {id:'rose', hex:'#e11d48'}, {id:'amber', hex:'#d97706'}, {id:'purple', hex:'#7c3aed'}];
+        const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+        // --- UTILS & UI COMPONENTS ---
+        const formatDateDisplay = (s) => { if(!s) return '-'; try { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; } catch(e){return s;} };
+        const calculateAge = (s) => { if(!s) return ''; const t = new Date(), b = new Date(s); let a = t.getFullYear() - b.getFullYear(); if(t.getMonth()<b.getMonth() || (t.getMonth()===b.getMonth() && t.getDate()<b.getDate())) a--; return isNaN(a)?'':a; };
+        const Toast = ({m, t, c}) => { useEffect(()=>{const tm=setTimeout(c,3000);return ()=>clearTimeout(tm)},[c]); const bg = t==='success'?'bg-emerald-600':'bg-red-500'; return <div className={`fixed top-4 right-4 z-50 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 fade-in ${bg}`}>{t==='success'?<CheckCircle2 size={20}/>:<AlertCircle size={20}/>}<span>{m}</span></div>; };
+        const Modal = ({isOpen, onClose, onConfirm, title, children, color='blue', confirmText="Confirmar", showCancel=true}) => { if(!isOpen) return null; return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm"><div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-${color}-500 p-6`}><div className="flex justify-between mb-4"><h3 className="text-xl font-bold text-gray-900">{title}</h3><button onClick={onClose}><X size={24} className="text-gray-400"/></button></div><div className="mb-6 text-gray-600">{children}</div><div className="flex gap-3">{showCancel && <button onClick={onClose} className="flex-1 px-4 py-3 border rounded-lg font-medium hover:bg-gray-50">Cancelar</button>}<button onClick={onConfirm} className={`flex-1 px-4 py-3 rounded-lg text-white font-bold shadow-md bg-${color}-600 hover:bg-${color}-700 transition-colors flex justify-center items-center gap-2`}>{confirmText}</button></div></div></div>; };
+        const Card = ({children, className="", onClick, ...p}) => <div className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} onClick={onClick} {...p}>{children}</div>;
+        const Button = ({children, onClick, disabled, icon:Icon, fullWidth, className=""}) => <button onClick={onClick} disabled={disabled} className={`px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 bg-medical-600 text-white hover:bg-medical-700 disabled:opacity-50 ${fullWidth?'w-full':''} ${className}`}>{disabled?<Loader2 className="animate-spin"/>:(Icon && <Icon size={20}/>)}{children}</button>;
+        const LoginModal = ({isOpen, onClose, onSuccess}) => { const [p,sP]=useState(''), [e,sE]=useState(false); const sub=()=>{if(p==='1234'){onSuccess();sP('');sE(false)}else{sE(true)}}; return <Modal isOpen={isOpen} onClose={onClose} onConfirm={sub} title="Acceso Profesional" confirmText="Ingresar" color="purple"><div className="space-y-4"><p className="text-sm text-gray-600">Ingrese su clave para acceder a la agenda.</p><div className="relative"><KeyRound className="absolute left-3 top-3 text-gray-400" size={20}/><input type="password" autoFocus className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-purple-200" value={p} onChange={e=>{sP(e.target.value);sE(false)}} onKeyDown={e=>e.key==='Enter'&&sub()}/></div>{e && <p className="text-xs text-red-500">Clave incorrecta.</p>}</div></Modal>; };
+
+        // --- APP PRINCIPAL ---
+        const App = () => {
+            
+            // =================================================================================
+            // =========================  ZONA DE CONFIGURACIÓN  ===============================
+            // =================================================================================
+            // ↓↓↓↓↓ PEGA AQUÍ TUS CLAVES ↓↓↓↓↓
+            
+            const firebaseConfig = useMemo(() => ({
+                apiKey: "AIzaSyAP75W__uvlcB5GU4Q7MbbMjV0Pz7knmIc",
   authDomain: "agendapoliconsultorio.firebaseapp.com",
   projectId: "agendapoliconsultorio",
   storageBucket: "agendapoliconsultorio.firebasestorage.app",
   messagingSenderId: "32383914542",
   appId: "1:32383914542:web:a24b8d63d1c6c22f0905bf"
-        };
+            }), []);
 
-        // ↑↑↑↑↑ PEGA AQUÍ LOS DATOS DE FIREBASE (Borra los de arriba y pon los tuyos) ↑↑↑↑↑
-        // ///////////////////////////////////////////////////////////////////////////////////////
-        // ///////////////////////////////////////////////////////////////////////////////////////
+            // =================================================================================
 
-
-        // --- ERROR BOUNDARY MEJORADO ---
-        class ErrorBoundary extends Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null, errorInfo: null };
-            }
-            static getDerivedStateFromError(error) { return { hasError: true, error }; }
-            componentDidCatch(error, errorInfo) { this.setState({ errorInfo }); console.error("Crash:", error, errorInfo); }
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-                            <div className="bg-white p-6 rounded-xl shadow-lg border border-red-200 max-w-lg w-full">
-                                <h2 className="text-xl font-bold text-red-600 mb-2 flex items-center gap-2"><AlertTriangle /> Algo salió mal</h2>
-                                <p className="text-sm text-gray-600 mb-4">La aplicación se detuvo para evitar daños mayores.</p>
-                                <div className="bg-gray-100 p-3 rounded text-xs font-mono text-gray-700 overflow-auto mb-4 max-h-32 border border-gray-200">
-                                    {this.state.error && this.state.error.toString()}
-                                </div>
-                                <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold shadow-md transition-all">
-                                    Borrar datos corruptos y Reiniciar
-                                </button>
-                            </div>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-
-        // --- MODELO DE DATOS INICIAL ---
-        const DEFAULT_CONSULTORIOS = [
-            {
-                id: 1,
-                name: "Consultorio Central",
-                address: "Av. Corrientes 1234, PB",
-                days: [1, 2, 3, 4, 5],
-                startHour: 9,
-                endHour: 17,
-                duration: 30,
-                insurances: ["OSDE", "Swiss Medical", "Galeno", "Particular"],
-                color: 'blue',
-                blockedDates: []
-            },
-            {
-                id: 2,
-                name: "Clínica Norte",
-                address: "Calle 14 Nro 500, San Martín",
-                days: [1, 3, 5],
-                startHour: 14,
-                endHour: 20,
-                duration: 20,
-                insurances: ["IOMA", "PAMI", "Particular"],
-                color: 'emerald',
-                blockedDates: []
-            },
-            {
-                id: 3,
-                name: "Consultorio Pediatría",
-                address: "Mitre 880, 1ro A",
-                days: [2, 4],
-                startHour: 10,
-                endHour: 16,
-                duration: 45,
-                insurances: ["Todas las Obras Sociales"],
-                color: 'rose',
-                blockedDates: []
-            }
-        ];
-
-        const COLOR_PALETTE = [
-            { id: 'blue', label: 'Azul', hex: '#2563eb' },
-            { id: 'emerald', label: 'Verde', hex: '#059669' },
-            { id: 'rose', label: 'Rosa', hex: '#e11d48' },
-            { id: 'amber', label: 'Naranja', hex: '#d97706' },
-            { id: 'purple', label: 'Violeta', hex: '#7c3aed' },
-        ];
-
-        const formatDateDisplay = (dateStr) => {
-            if (!dateStr) return '-';
-            try { const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; } catch (e) { return dateStr; }
-        };
-
-        const calculateAge = (dateString) => {
-            if (!dateString) return '';
-            const today = new Date();
-            const birthDate = new Date(dateString);
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) { age--; }
-            return isNaN(age) ? '' : age;
-        };
-
-        const Toast = ({ message, type, onClose }) => {
-            useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
-            const bgClass = type === 'success' ? 'bg-emerald-600' : 'bg-red-500';
-            return <div className={`fixed top-4 right-4 z-50 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 fade-in ${bgClass}`}>{type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}<span className="font-medium">{message}</span></div>;
-        };
-
-        const Modal = ({ isOpen, onClose, onConfirm, title, children, color = 'blue', confirmText = "Confirmar", showCancel = true }) => {
-            if (!isOpen) return null;
-            return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm transition-opacity"><div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scaleIn border-t-8 border-${color}-500`}><div className="p-6"><div className="flex justify-between items-start mb-4"><h3 className={`text-xl font-bold text-gray-900`}>{title}</h3><button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button></div><div className="mb-6 text-gray-600">{children}</div><div className="flex gap-3">{showCancel && <button onClick={onClose} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50">Cancelar</button>}<button onClick={onConfirm} className={`flex-1 px-4 py-3 rounded-lg text-white font-bold shadow-md bg-${color}-600 hover:bg-${color}-700 transition-colors flex justify-center items-center gap-2`}>{confirmText}</button></div></div></div></div>;
-        };
-
-        const Card = ({ children, className = "", onClick, ...props }) => <div className={`bg-white rounded-xl shadow-sm border border-medical-100 p-6 ${className}`} onClick={onClick} {...props}>{children}</div>;
-
-        const Button = ({ children, onClick, variant = 'primary', disabled = false, fullWidth = false, icon: Icon, type = "button", color = 'medical' }) => {
-            const baseClass = "px-4 py-3 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
-            const variants = { primary: "bg-medical-600 hover:bg-medical-700 text-white shadow-md shadow-medical-200", secondary: "bg-white border-2 border-medical-100 text-medical-700 hover:border-medical-500 hover:bg-medical-50", ghost: "text-gray-500 hover:bg-gray-100 hover:text-gray-700" };
-            return <button type={type} onClick={onClick} disabled={disabled} className={`${baseClass} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>{disabled ? <Loader2 className="animate-spin" size={20} /> : (Icon && <Icon size={20} />)}{children}</button>;
-        };
-
-        const LoginModal = ({ isOpen, onClose, onSuccess }) => {
-            const [password, setPassword] = useState('');
-            const [error, setError] = useState(false);
-            const handleSubmit = () => { if (password === '1234') { onSuccess(); setPassword(''); setError(false); } else { setError(true); } };
-            return <Modal isOpen={isOpen} onClose={onClose} onConfirm={handleSubmit} title="Acceso Profesional" confirmText="Ingresar" color="purple"><div className="space-y-4"><p className="text-sm text-gray-600">Ingrese su clave para acceder a la agenda.</p><div className="relative"><KeyRound className="absolute left-3 top-3 text-gray-400" size={20} /><input type="password" autoFocus className={`w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-purple-200'}`} placeholder="Clave de acceso" value={password} onChange={(e) => { setPassword(e.target.value); setError(false); }} onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} /></div>{error && <p className="text-xs text-red-500 font-medium">Clave incorrecta. Intente nuevamente.</p>}</div></Modal>;
-        };
-
-        // --- APP PRINCIPAL ---
-        const App = () => {
             const [view, setView] = useState('landing');
             const [appointments, setAppointments] = useState([]);
             const [consultorios, setConsultorios] = useState(DEFAULT_CONSULTORIOS);
             const [pendingSyncs, setPendingSyncs] = useState([]);
             const [toast, setToast] = useState(null);
-            const [isOnline, setIsOnline] = useState(true);
-            const [firebaseReady, setFirebaseReady] = useState(false);
-            const [firebaseError, setFirebaseError] = useState(null);
+            const [firebaseState, setFirebaseState] = useState({ ready: false, error: null, status: 'Iniciando...' });
             const [db, setDb] = useState(null);
             const [showLogin, setShowLogin] = useState(false);
             const [directRoomId, setDirectRoomId] = useState(null);
+            const isMounted = useRef(true);
 
             useEffect(() => {
                 // 1. CARGA SEGURA DATOS LOCALES
@@ -234,7 +150,6 @@
                     
                     if (localData) {
                         const parsed = JSON.parse(localData);
-                        // SANITIZACIÓN: Filtrar turnos corruptos (sin slot, sin fecha)
                         if (Array.isArray(parsed)) {
                             const validAppointments = parsed.filter(a => a && a.id && a.date && a.slot && a.name);
                             setAppointments(validAppointments);
@@ -249,45 +164,69 @@
                     }
                 } catch (e) { console.error("Error local storage", e); }
 
-                // 2. INICIALIZACIÓN FIREBASE
+                // 2. INICIALIZACIÓN FIREBASE (SEGURO INTERNO CON TIMEOUT)
                 const initFirebase = async () => {
-                    if (manualConfig.apiKey === "TU_API_KEY_AQUI") return; 
+                    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
+                        if(isMounted.current) setFirebaseState({ ready: false, error: null, status: 'Modo Local' });
+                        return;
+                    }
 
                     try {
-                        let app;
-                        if (getApps().length === 0) {
-                            app = initializeApp(manualConfig);
-                        } else {
-                            app = getApp();
-                        }
+                        if(isMounted.current) setFirebaseState(s => ({ ...s, status: 'Conectando...' }));
+                        
+                        // TIMEOUT DE SEGURIDAD (7 segundos)
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error("Tiempo de espera agotado. Usando Modo Offline.")), 7000)
+                        );
 
-                        const auth = getAuth(app);
-                        await signInAnonymously(auth);
+                        const connectionPromise = (async () => {
+                            let app;
+                            if (getApps().length === 0) {
+                                app = initializeApp(firebaseConfig);
+                            } else {
+                                app = getApp();
+                            }
+
+                            const auth = getAuth(app);
+                            // Intentamos login anonimo
+                            await signInAnonymously(auth);
+                            
+                            const database = getFirestore(app);
+                            return database;
+                        })();
+
+                        // Competencia: Conexión vs Timeout
+                        const database = await Promise.race([connectionPromise, timeoutPromise]);
                         
-                        const database = getFirestore(app);
+                        if (!isMounted.current) return;
+                        
                         setDb(database);
-                        setFirebaseReady(true);
-                        setFirebaseError(null);
                         
+                        // Carga inicial
                         const q = collection(database, "appointments");
                         const snap = await getDocs(q);
                         const remoteData = [];
                         snap.forEach(doc => {
                             const d = doc.data();
-                            // SANITIZACIÓN REMOTA: Solo aceptar turnos válidos
                             if (d && d.name && d.date && d.slot) {
                                 remoteData.push({ ...d, id: doc.id });
                             }
                         });
 
-                        if (remoteData.length > 0) {
-                            setAppointments(remoteData);
-                            localStorage.setItem('appointments', JSON.stringify(remoteData));
+                        if (isMounted.current) {
+                            if (remoteData.length > 0) {
+                                setAppointments(remoteData);
+                                localStorage.setItem('appointments', JSON.stringify(remoteData));
+                            }
+                            setFirebaseState({ ready: true, error: null, status: 'Conectado' });
                         }
 
                     } catch (error) {
-                        console.warn("Error Firebase:", error);
-                        setFirebaseError(error.message);
+                        console.warn("Firebase Init Warning:", error);
+                        if (isMounted.current) {
+                            // Si falla por timeout o error, pasamos a MODO LOCAL automáticamente pero mostramos aviso
+                            setFirebaseState({ ready: false, error: error.message, status: 'Modo Local (Fallback)' });
+                        }
                     }
                 };
 
@@ -305,11 +244,13 @@
 
                 window.addEventListener('online', () => setIsOnline(true));
                 window.addEventListener('offline', () => setIsOnline(false));
+                
                 return () => {
+                    isMounted.current = false;
                     window.removeEventListener('online', () => setIsOnline(true));
                     window.removeEventListener('offline', () => setIsOnline(false));
                 };
-            }, []);
+            }, [firebaseConfig]);
 
             const showToast = (msg, type = 'success') => setToast({ message: msg, type, id: Date.now() });
 
@@ -324,7 +265,7 @@
                 setAppointments(updatedAppointments);
                 localStorage.setItem('appointments', JSON.stringify(updatedAppointments));
 
-                if (firebaseReady && isOnline && db) {
+                if (firebaseState.ready && db) {
                     try {
                         await addDoc(collection(db, "appointments"), newAppointment);
                     } catch (e) {
@@ -343,30 +284,52 @@
                 showToast("Estado actualizado", "success");
             };
 
+            // --- DEBUG FOOTER ---
+            const DebugFooter = () => (
+                <div className="fixed bottom-0 left-0 w-full bg-gray-800 text-white text-xs p-1 flex justify-between items-center px-4 z-50 opacity-90">
+                    <div className="flex gap-4">
+                        <span>Estado: <span className={firebaseState.ready ? "text-green-400 font-bold" : firebaseState.error ? "text-yellow-400" : "text-yellow-400"}>{firebaseState.status}</span></span>
+                        <span>Key: {firebaseConfig.apiKey.substring(0, 5)}...</span>
+                    </div>
+                    {firebaseState.error && <span className="text-red-300 cursor-pointer" title={firebaseState.error}>Nota: {firebaseState.error.substring(0, 40)}...</span>}
+                </div>
+            );
+
             // Render Views
             if (view === 'landing') return (
-                <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-medical-50 to-white relative">
+                <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-medical-50 to-white relative pb-10">
+                    <DebugFooter />
                     <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} onSuccess={() => { setShowLogin(false); setView('professional'); }} />
                     <div className="absolute top-6 right-6 flex gap-2">
                         <button onClick={() => setShowLogin(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-600 hover:text-medical-600 shadow-sm transition-all"><Lock size={16} /><span className="hidden sm:inline">Soy Profesional</span></button>
                     </div>
-                    <div className="text-center mb-10 max-w-3xl mt-12">
+                    <div className="text-center mb-10 mt-12">
                         <div className="bg-medical-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm"><Stethoscope className="text-medical-600" size={48} /></div>
                         <h1 className="text-5xl font-bold text-gray-900 mb-4 tracking-tight">Consultorios Dra. Carolina Abraldes</h1>
                         <p className="text-gray-600 text-xl">Bienvenido al sistema de gestión de turnos integrado.</p>
                         
-                        {/* Indicadores de Estado */}
-                        {!firebaseReady && !firebaseError && <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-sm font-medium"><WifiOff size={16} /> Modo Local (Offline-First)</div>}
-                        {firebaseError && <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-red-100 text-red-700 rounded-full text-sm font-medium" title={firebaseError}><AlertTriangle size={16} /> Error de Conexión (Ver consola)</div>}
-                        {firebaseReady && <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium"><Wifi size={16} /> Conectado a la Nube</div>}
+                        {/* MENSAJE DE ERROR DETALLADO */}
+                        {firebaseState.error ? (
+                            <div className="mt-6 p-3 bg-orange-50 border border-orange-200 rounded-lg max-w-md text-left mx-auto animate-fadeIn flex items-center gap-3">
+                                <WifiOff className="text-orange-500" size={20} />
+                                <div>
+                                    <p className="text-sm font-bold text-orange-700">Modo Offline Activo</p>
+                                    <p className="text-xs text-orange-600">No se pudo conectar a la nube ({firebaseState.error}). Puedes usar la agenda localmente.</p>
+                                </div>
+                            </div>
+                        ) : !firebaseState.ready && (
+                            <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm"><Loader2 className="animate-spin" size={16}/> Conectando...</div>
+                        )}
+                        {firebaseState.ready && <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 bg-green-100 text-green-700 rounded-full text-sm"><Wifi size={16}/> Conectado a la Nube</div>}
+
                     </div>
                     <div className="w-full max-w-xl">
                         <Card className="hover:border-medical-400 cursor-pointer transition-all hover:shadow-xl group transform hover:-translate-y-1 border-2 border-medical-50" onClick={() => setView('patient')}>
                             <div className="flex flex-col items-center text-center p-8">
                                 <div className="w-24 h-24 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-6 group-hover:scale-110 transition-transform shadow-inner"><User size={48} /></div>
                                 <h2 className="text-4xl font-bold text-gray-900 mb-4">Soy Paciente</h2>
-                                <p className="text-gray-500 text-lg mb-8 leading-relaxed">Solicitar un nuevo turno médico, ver consultorios y horarios disponibles.</p>
-                                <Button className="w-full text-lg py-4 font-bold" onClick={(e) => { e.stopPropagation(); setView('patient'); }}>Solicitar Turno <ChevronRight size={24} /></Button>
+                                <p className="text-gray-500 text-lg mb-8">Solicitar turno médico</p>
+                                <Button className="w-full text-lg py-4" onClick={(e)=>{e.stopPropagation();setView('patient')}}>Solicitar Turno <ChevronRight size={24}/></Button>
                             </div>
                         </Card>
                     </div>
@@ -374,24 +337,14 @@
             );
 
             return (
-                <div className="min-h-screen bg-medical-50">
-                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-                    <header className="bg-white shadow-sm sticky top-0 z-40">
-                        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('landing')}>
-                                <div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20} /></div>
-                                <span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div>
-                                <Button variant="ghost" onClick={() => setView('landing')}><LogOut size={18} /> <span className="hidden sm:inline">Salir</span></Button>
-                            </div>
-                        </div>
-                    </header>
+                <div className="min-h-screen bg-medical-50 pb-10">
+                    <DebugFooter />
+                    {toast && <Toast m={toast.message} t={toast.type} c={()=>setToast(null)} />}
+                    <header className="bg-white shadow-sm sticky top-0 z-40"><div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between"><div className="flex items-center gap-2 cursor-pointer" onClick={()=>setView('landing')}><div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20}/></div><span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span></div><div className="flex items-center gap-4"><div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div><Button variant="ghost" onClick={()=>setView('landing')}><LogOut size={18}/> Salir</Button></div></div></header>
                     <main className="max-w-6xl mx-auto px-4 py-8">
-                        {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt) => { if(saveAppointment(apt)) { showToast("Turno confirmado exitosamente"); setView('landing'); setDirectRoomId(null); } else { showToast("Error al guardar", "error"); }}} onCancel={() => { setView('landing'); setDirectRoomId(null); }} initialRoomId={directRoomId} showToast={showToast} />}
-                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={() => setView('admin')} toggleConfirmation={toggleConfirmation} />}
-                        {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveConsultorios} onBack={() => setView('professional')} />}
+                        {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveApt(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
+                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConf}/>}
+                        {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveCons} onBack={()=>setView('professional')}/>}
                     </main>
                 </div>
             );
@@ -438,10 +391,9 @@
                 if (!room) return [];
                 const safeDuration = Number(room.duration);
                 if (!safeDuration || safeDuration < 5) return []; 
-                if (room.blockedDates && room.blockedDates.includes(selectedDate)) return [{ blocked: true, reason: 'Fecha bloqueada.' }];
+                if (room.blockedDates && room.blockedDates.includes(selectedDate)) return [{ blocked: true, reason: 'Fecha bloqueada' }];
                 const [y, m, d] = selectedDate.split('-').map(Number);
-                const dateObj = new Date(y, m - 1, d, 12, 0, 0); 
-                const dayOfWeek = dateObj.getDay(); 
+                const dateObj = new Date(y, m - 1, d, 12).getDay();
                 if (!room.days.includes(dayOfWeek)) return []; 
                 const slots = [];
                 const existingApts = appointments.filter(a => a.consultoryId === selectedRoom && a.date === selectedDate);
