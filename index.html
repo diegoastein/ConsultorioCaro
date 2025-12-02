@@ -79,10 +79,10 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo, Component, useRef, useCallback } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug, PlusCircle } from 'lucide-react';
+        import { Calendar, Clock, MapPin, User, Stethoscope, ChevronRight, CheckCircle2, AlertCircle, Home, LogOut, Loader2, Wifi, WifiOff, Settings, Plus, Trash2, Save, AlertTriangle, X, Lock, KeyRound, Share2, Link as LinkIcon, ArrowLeft, Search, MessageCircle, Send, ChevronDown, ChevronUp, Bug, PlusCircle, Pencil } from 'lucide-react';
         import { initializeApp, getApps, getApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-        import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, query, where } from 'firebase/firestore';
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
         
         // --- ERROR BOUNDARY ---
         class ErrorBoundary extends Component {
@@ -119,7 +119,8 @@
             const variants = {
                 primary: "bg-medical-600 text-white hover:bg-medical-700 shadow-md",
                 secondary: "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50",
-                ghost: "text-gray-500 hover:text-medical-600 hover:bg-medical-50"
+                ghost: "text-gray-500 hover:text-medical-600 hover:bg-medical-50",
+                danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50"
             };
             return <button onClick={onClick} disabled={disabled} className={`${baseClass} ${variants[variant] || variants.primary} ${fullWidth?'w-full':''} ${className}`}>{disabled?<Loader2 className="animate-spin"/>:(Icon && <Icon size={20}/>)}{children}</button>;
         };
@@ -267,6 +268,32 @@
                 return true;
             };
 
+            const updateAppointment = async (updatedAppointment) => {
+                const updatedList = appointments.map(a => a.id === updatedAppointment.id ? updatedAppointment : a);
+                setAppointments(updatedList);
+                localStorage.setItem('appointments', JSON.stringify(updatedList));
+
+                if (firebaseState.ready && db) {
+                    try {
+                        await updateDoc(doc(db, "appointments", updatedAppointment.id), updatedAppointment);
+                    } catch (e) { console.error("Update failed", e); }
+                }
+                showToast("Turno actualizado correctamente");
+            };
+
+            const deleteAppointment = async (id) => {
+                const updatedList = appointments.filter(a => a.id !== id);
+                setAppointments(updatedList);
+                localStorage.setItem('appointments', JSON.stringify(updatedList));
+
+                if (firebaseState.ready && db) {
+                    try {
+                        await deleteDoc(doc(db, "appointments", id));
+                    } catch (e) { console.error("Delete failed", e); }
+                }
+                showToast("Turno eliminado", "success");
+            };
+
             const toggleConfirmation = (appointmentId) => {
                 const updatedAppointments = appointments.map(apt => apt.id === appointmentId ? { ...apt, confirmedByProfessional: !apt.confirmedByProfessional } : apt);
                 setAppointments(updatedAppointments);
@@ -319,7 +346,7 @@
                     <header className="bg-white shadow-sm sticky top-0 z-40"><div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between"><div className="flex items-center gap-2 cursor-pointer" onClick={()=>setView('landing')}><div className="bg-medical-600 text-white p-1.5 rounded-md"><Stethoscope size={20}/></div><span className="font-bold text-gray-800 hidden sm:block">Consultorios Dra. Carolina Abraldes</span></div><div className="flex items-center gap-4"><div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{pendingSyncs.length > 0 ? <><Loader2 className="animate-spin text-orange-500" size={14} /> Sincronizando</> : <><CheckCircle2 className="text-emerald-500" size={14} /> Guardado</>}</div><Button variant="ghost" onClick={()=>setView('landing')}><LogOut size={18}/> Salir</Button></div></div></header>
                     <main className="max-w-6xl mx-auto px-4 py-8">
                         {view === 'patient' && <PatientView consultorios={consultorios} appointments={appointments} onSave={(apt)=>{if(saveAppointment(apt)){showToast("Turno confirmado");setView('landing');setDirectRoomId(null)}else{showToast("Error","error")}}} onCancel={()=>{setView('landing');setDirectRoomId(null)}} initialRoomId={directRoomId} showToast={showToast}/>}
-                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation} onManualSave={saveAppointment} />}
+                        {view === 'professional' && <ProfessionalView consultorios={consultorios} appointments={appointments} onAdmin={()=>setView('admin')} toggleConfirmation={toggleConfirmation} onManualSave={saveAppointment} onDelete={deleteAppointment} onEdit={updateAppointment} />}
                         {view === 'admin' && <AdminView consultorios={consultorios} onSave={saveConsultorios} onBack={()=>setView('professional')}/>}
                     </main>
                 </div>
@@ -474,13 +501,17 @@
             );
         };
 
-        const ProfessionalView = ({ consultorios, appointments, onAdmin, toggleConfirmation, onManualSave }) => {
+        const ProfessionalView = ({ consultorios, appointments, onAdmin, toggleConfirmation, onManualSave, onDelete, onEdit }) => {
             const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
             const [filterRoom, setFilterRoom] = useState('all');
             const [expandedAptId, setExpandedAptId] = useState(null);
             const [whatsappModal, setWhatsappModal] = useState({ isOpen: false, data: null, message: '' });
             const [sobreturnoModal, setSobreturnoModal] = useState(false);
             const [sobreturnoData, setSobreturnoData] = useState({ consultoryId: '', date: new Date().toISOString().split('T')[0], time: '', name: '', dni: '', phone: '', insurance: '' });
+            
+            // Edit States
+            const [editModal, setEditModal] = useState(false);
+            const [editData, setEditData] = useState(null);
 
             const filteredAppointments = useMemo(() => {
                 return appointments.filter(apt => {
@@ -530,6 +561,30 @@
                 setSobreturnoModal(false);
                 setSobreturnoData({ consultoryId: '', date: new Date().toISOString().split('T')[0], time: '', name: '', dni: '', phone: '', insurance: '' });
             };
+            
+            const handleEditClick = (apt) => {
+                setEditData({ ...apt });
+                setEditModal(true);
+            };
+
+            const handleEditSubmit = () => {
+                if(!editData.consultoryId || !editData.slot || !editData.name) return;
+                const room = consultorios.find(c => c.id === parseInt(editData.consultoryId));
+                const updatedApt = {
+                    ...editData,
+                    consultoryId: parseInt(editData.consultoryId),
+                    consultoryName: room ? room.name : editData.consultoryName, // Actualizar nombre si cambia ID
+                };
+                onEdit(updatedApt);
+                setEditModal(false);
+                setEditData(null);
+            };
+
+            const handleDeleteClick = (id) => {
+                if(confirm("¿Está seguro de que desea eliminar este turno permanentemente?")) {
+                    onDelete(id);
+                }
+            };
 
             return (
                 <div className="fade-in space-y-6">
@@ -544,6 +599,14 @@
                         <div><label className="block font-medium text-gray-700 mb-1">Paciente</label><input type="text" placeholder="Nombre completo" className="w-full border rounded p-2" value={sobreturnoData.name} onChange={e=>setSobreturnoData({...sobreturnoData, name: e.target.value})}/></div>
                         <div className="grid grid-cols-2 gap-2"><div><label className="block font-medium text-gray-700 mb-1">DNI</label><input type="number" className="w-full border rounded p-2" value={sobreturnoData.dni} onChange={e=>setSobreturnoData({...sobreturnoData, dni: e.target.value})}/></div><div><label className="block font-medium text-gray-700 mb-1">Teléfono</label><input type="tel" className="w-full border rounded p-2" value={sobreturnoData.phone} onChange={e=>setSobreturnoData({...sobreturnoData, phone: e.target.value})}/></div></div>
                     </div></Modal>
+                    
+                    {/* MODAL EDICION */}
+                    {editData && <Modal isOpen={editModal} onClose={() => setEditModal(false)} onConfirm={handleEditSubmit} title="Editar Turno" color="blue" confirmText="Guardar Cambios"><div className="space-y-4 text-sm">
+                        <div><label className="block font-medium text-gray-700 mb-1">Consultorio</label><select className="w-full border rounded p-2" value={editData.consultoryId} onChange={e=>setEditData({...editData, consultoryId: e.target.value})}><option value="">Seleccione...</option>{consultorios.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block font-medium text-gray-700 mb-1">Fecha</label><input type="date" className="w-full border rounded p-2" value={editData.date} onChange={e=>setEditData({...editData, date: e.target.value})}/></div><div><label className="block font-medium text-gray-700 mb-1">Hora (HH:MM)</label><input type="time" className="w-full border rounded p-2" value={editData.slot} onChange={e=>setEditData({...editData, slot: e.target.value})}/></div></div>
+                        <div><label className="block font-medium text-gray-700 mb-1">Paciente</label><input type="text" placeholder="Nombre completo" className="w-full border rounded p-2" value={editData.name} onChange={e=>setEditData({...editData, name: e.target.value})}/></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block font-medium text-gray-700 mb-1">DNI</label><input type="number" className="w-full border rounded p-2" value={editData.dni} onChange={e=>setEditData({...editData, dni: e.target.value})}/></div><div><label className="block font-medium text-gray-700 mb-1">Teléfono</label><input type="tel" className="w-full border rounded p-2" value={editData.phone} onChange={e=>setEditData({...editData, phone: e.target.value})}/></div></div>
+                    </div></Modal>}
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold text-gray-800">Agenda Médica</h2>
@@ -555,7 +618,7 @@
                     </div>
                     <div className="grid md:grid-cols-4 gap-6">
                         <Card className="md:col-span-4 bg-gradient-to-r from-medical-600 to-teal-500 text-white border-none"><div className="flex justify-around text-center"><div><p className="text-medical-100 text-sm font-medium">Total Turnos Hoy</p><p className="text-3xl font-bold">{filteredAppointments.length}</p></div><div className="border-l border-medical-400 pl-8"><p className="text-medical-100 text-sm font-medium">Confirmados</p><p className="text-3xl font-bold">{filteredAppointments.filter(a => a.confirmedByProfessional).length}</p></div><div className="border-l border-medical-400 pl-8 hidden sm:block"><p className="text-medical-100 text-sm font-medium">Obras Sociales</p><p className="text-3xl font-bold">{new Set(filteredAppointments.map(a => a.insurance)).size}</p></div></div></Card>
-                        <div className="md:col-span-4"><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="font-bold text-gray-700">Listado de Pacientes</h3><span className="text-xs font-medium text-gray-500">{formatDateDisplay(filterDate)}</span></div>{filteredAppointments.length === 0 ? <div className="p-12 text-center text-gray-400"><Calendar size={48} className="mx-auto mb-3 opacity-20" /><p>No hay turnos registrados para este criterio.</p></div> : <div className="divide-y divide-gray-100">{filteredAppointments.map(apt => (<div key={apt.id} className="border-b border-gray-100 last:border-0"><div className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${expandedAptId === apt.id ? 'bg-gray-50' : ''}`} onClick={() => setExpandedAptId(expandedAptId === apt.id ? null : apt.id)}><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div className="flex items-start gap-4"><div className={`bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px] ${apt.isSobreturno ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}`}>{apt.slot}</div><div><h4 className="font-bold text-gray-900 flex items-center gap-2">{apt.name} {expandedAptId === apt.id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>} {apt.isSobreturno && <span className="text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded ml-2">Sobreturno</span>}</h4><div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500"><span className="flex items-center gap-1 font-medium text-gray-700">DNI: {apt.dni || '-'}</span><span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span></div></div></div><div className="flex items-center gap-2 md:justify-end" onClick={e => e.stopPropagation()}><button onClick={() => handleWhatsAppClick(apt)} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors" title="Enviar WhatsApp"><MessageCircle size={18} /></button><button onClick={() => toggleConfirmation(apt.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${apt.confirmedByProfessional ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`} title={apt.confirmedByProfessional ? "Click para quitar confirmación" : "Click para confirmar asistencia"}>{apt.confirmedByProfessional ? <CheckCircle2 size={14}/> : <Clock size={14}/>}{apt.confirmedByProfessional ? "Confirmado" : "Reservado"}</button></div></div>{expandedAptId === apt.id && <div className="mt-4 pl-0 md:pl-[96px] text-sm text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 animate-fadeIn border-t border-gray-200 pt-4"><p><span className="font-semibold text-gray-700">Teléfono:</span> {apt.phone}</p><p><span className="font-semibold text-gray-700">Fecha Nacimiento:</span> {formatDateDisplay(apt.birthDate)} ({calculateAge(apt.birthDate)} años)</p><p><span className="font-semibold text-gray-700">Cobertura:</span> {apt.insurance}</p><p><span className="font-semibold text-gray-700">DNI Completo:</span> {apt.dni}</p><p className="md:col-span-2 text-xs text-gray-400 mt-2">ID Turno: {apt.id}</p></div>}</div></div>))}</div>}</div></div></div></div>
+                        <div className="md:col-span-4"><div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"><div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center"><h3 className="font-bold text-gray-700">Listado de Pacientes</h3><span className="text-xs font-medium text-gray-500">{formatDateDisplay(filterDate)}</span></div>{filteredAppointments.length === 0 ? <div className="p-12 text-center text-gray-400"><Calendar size={48} className="mx-auto mb-3 opacity-20" /><p>No hay turnos registrados para este criterio.</p></div> : <div className="divide-y divide-gray-100">{filteredAppointments.map(apt => (<div key={apt.id} className="border-b border-gray-100 last:border-0"><div className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${expandedAptId === apt.id ? 'bg-gray-50' : ''}`} onClick={() => setExpandedAptId(expandedAptId === apt.id ? null : apt.id)}><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div className="flex items-start gap-4"><div className={`bg-medical-100 text-medical-700 px-3 py-2 rounded-lg font-bold text-center min-w-[80px] ${apt.isSobreturno ? 'bg-rose-100 text-rose-700 border border-rose-200' : ''}`}>{apt.slot}</div><div><h4 className="font-bold text-gray-900 flex items-center gap-2">{apt.name} {expandedAptId === apt.id ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>} {apt.isSobreturno && <span className="text-xs bg-rose-500 text-white px-1.5 py-0.5 rounded ml-2">Sobreturno</span>}</h4><div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500"><span className="flex items-center gap-1 font-medium text-gray-700">DNI: {apt.dni || '-'}</span><span className="flex items-center gap-1"><MapPin size={14}/> {apt.consultoryName}</span></div></div></div><div className="flex items-center gap-2 md:justify-end" onClick={e => e.stopPropagation()}><button onClick={() => handleWhatsAppClick(apt)} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors" title="Enviar WhatsApp"><MessageCircle size={18} /></button><button onClick={() => toggleConfirmation(apt.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${apt.confirmedByProfessional ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200'}`} title={apt.confirmedByProfessional ? "Click para quitar confirmación" : "Click para confirmar asistencia"}>{apt.confirmedByProfessional ? <CheckCircle2 size={14}/> : <Clock size={14}/>}{apt.confirmedByProfessional ? "Confirmado" : "Reservado"}</button><button onClick={() => handleEditClick(apt)} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full transition-colors" title="Editar Turno"><Pencil size={18} /></button><button onClick={() => handleDeleteClick(apt.id)} className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-full transition-colors" title="Borrar Turno"><Trash2 size={18} /></button></div></div>{expandedAptId === apt.id && <div className="mt-4 pl-0 md:pl-[96px] text-sm text-gray-600 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 animate-fadeIn border-t border-gray-200 pt-4"><p><span className="font-semibold text-gray-700">Teléfono:</span> {apt.phone}</p><p><span className="font-semibold text-gray-700">Fecha Nacimiento:</span> {formatDateDisplay(apt.birthDate)} ({calculateAge(apt.birthDate)} años)</p><p><span className="font-semibold text-gray-700">Cobertura:</span> {apt.insurance}</p><p><span className="font-semibold text-gray-700">DNI Completo:</span> {apt.dni}</p><p className="md:col-span-2 text-xs text-gray-400 mt-2">ID Turno: {apt.id}</p></div>}</div></div>))}</div>}</div></div></div></div>
             );
         };
 
